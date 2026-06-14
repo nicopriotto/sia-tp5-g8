@@ -1,0 +1,41 @@
+{
+  "dataset": {
+    "source_path": "../../data/raw/font.h",
+    "subset": {
+      "mode": "all_32",
+      "name": "all_32",
+      "indices": []
+    },
+    "seed": 42
+  },
+  "model": {
+    "input_dim": 35,
+    "latent_dim": 2,
+    "encoder_hidden_layers": [24, 8],
+    "decoder_hidden_layers": [8, 24],
+    "hidden_activation": "tanh",
+    "output_activation": "sigmoid",
+    "weight_init": "xavier_uniform",
+    "dropout": 0.0,
+    "loss_function": "binary_cross_entropy",
+    "optimizer": "adam"
+  },
+  "training": {
+    "learning_rate": 0.001,
+    "batch_size": 8,
+    "epochs_max": 300,
+    "early_stopping_patience": 30,
+    "l2_weight_decay": 1e-05,
+    "gradient_clip_norm": null
+  },
+  "evaluation": {
+    "pixel_threshold": 0.5,
+    "selection_metric": "exact_reconstruction_rate"
+  },
+  "denoising": {
+    "noise_type": "bit_flip",
+    "noise_level": 0.0,
+    "train_with_clean_target": true,
+    "noise_on_train_only": true
+  }
+}
