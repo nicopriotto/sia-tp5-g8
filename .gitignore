@@ -220,6 +220,7 @@ __marimo__/
 # Project outputs
 autoencoder_basic/output/
 autoencoder_denoising/output/
+autoencoder_vae/output/
 experiments/output/
 
 # CryptoPunks dataset (se comparte por zip, no por git)
