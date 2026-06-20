@@ -22,8 +22,8 @@ class Autoencoder:
     ) -> None:
         if input_dim != 35:
             raise ValueError("input_dim must be 35")
-        if latent_dim != 2:
-            raise ValueError("latent_dim must be 2")
+        if latent_dim < 1:
+            raise ValueError("latent_dim must be >= 1")
         if output_activation != "sigmoid":
             raise ValueError("output_activation must be sigmoid")
         if dropout < 0.0 or dropout >= 1.0:
