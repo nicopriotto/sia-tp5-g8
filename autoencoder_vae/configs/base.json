@@ -1,0 +1,35 @@
+{
+  "dataset": {
+    "tensor_path": "../../data/tensors/punks_rgb.npy",
+    "limit": null,
+    "seed": 38200
+  },
+  "model": {
+    "input_dim": 1728,
+    "latent_dim": 10,
+    "encoder_hidden_layers": [512, 128],
+    "decoder_hidden_layers": [128, 512],
+    "hidden_activation": "relu",
+    "output_activation": "sigmoid",
+    "weight_init": "he_uniform",
+    "dropout": 0.0,
+    "loss_function": "binary_cross_entropy",
+    "optimizer": "adam",
+    "beta": 1.0
+  },
+  "training": {
+    "learning_rate": 0.001,
+    "batch_size": 128,
+    "epochs_max": 150,
+    "early_stopping_patience": 25,
+    "l2_weight_decay": 0.0,
+    "gradient_clip_norm": 5.0
+  },
+  "evaluation": {},
+  "denoising": {
+    "train_with_clean_target": true,
+    "noise_level": 0.0,
+    "noise_type": "bit_flip",
+    "noise_on_train_only": true
+  }
+}
