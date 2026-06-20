@@ -20,8 +20,8 @@ class Autoencoder:
         dropout: float = 0.0,
         rng: np.random.Generator | None = None,
     ) -> None:
-        if input_dim != 35:
-            raise ValueError("input_dim must be 35")
+        if input_dim < 1:
+            raise ValueError("input_dim must be >= 1")
         if latent_dim < 1:
             raise ValueError("latent_dim must be >= 1")
         if output_activation != "sigmoid":
