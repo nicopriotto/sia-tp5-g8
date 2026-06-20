@@ -221,3 +221,11 @@ __marimo__/
 autoencoder_basic/output/
 autoencoder_denoising/output/
 experiments/output/
+
+# CryptoPunks dataset (se comparte por zip, no por git)
+data/raw/punks.png
+data/punks/
+data/tensors/
+data/preprocess.py
+data/README.md
+data_punks_bundle.zip
