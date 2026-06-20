@@ -160,7 +160,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--n", type=int, default=200, help="Cantidad de punks generados a evaluar.")
     parser.add_argument("--seed", type=int, default=7, help="Semilla de muestreo.")
     parser.add_argument("--top-n", type=int, default=8, help="Cuántos originales mostrar en el ranking.")
-    parser.add_argument("--index", type=int, default=None, help="Índice del generado a rankear (default: el más original).")
+    parser.add_argument("--rankings", type=int, default=10, help="Cuántas imágenes de ranking generar (los N generados más originales).")
+    parser.add_argument("--index", type=int, default=None, help="Rankear solo este generado (sobrescribe --rankings).")
     parser.add_argument("--pca-dim", type=int, default=50, help="Componentes PCA del embedding sobre píxeles.")
     return parser.parse_args()
 
@@ -212,18 +213,24 @@ def main() -> None:
     print(f"  originalidad PCA     : ratio medio {pca_ratio.mean():.2f}  | originales (ratio>1): {(pca_ratio >= 1).mean() * 100:.0f}%")
     print(f"  'nuevos' en AMBOS espacios: {novel.mean() * 100:.0f}%")
 
-    # ranking del generado elegido (default: el más original por ratio latente)
-    chosen = args.index if args.index is not None else int(np.argmax(lat_ratio))
-    order = np.argsort(cdist(lat_gen[chosen:chosen + 1], lat_train)[0])[: args.top_n]
-    order_dists = cdist(lat_gen[chosen:chosen + 1], lat_train)[0][order]
-    verdict = (
-        f"ratio L={lat_ratio[chosen]:.2f} P={pca_ratio[chosen]:.2f}"
-        f" ({'NUEVO' if rows[chosen]['novel'] else 'parecido a un real'})"
-    )
-    plot_ranking(gen_images[chosen], X, order, order_dists, chosen, verdict, out_dir / f"ranking_gen_{chosen}.png")
+    # rankings: --index -> solo ese; si no, los N generados más originales (por ratio latente)
+    if args.index is not None:
+        chosen_indices = [args.index]
+    else:
+        chosen_indices = list(np.argsort(-lat_ratio)[: args.rankings])
 
     print(f"  CSV -> {csv_path}")
-    print(f"  ranking del generado #{chosen} -> {out_dir / f'ranking_gen_{chosen}.png'}")
+    for chosen in chosen_indices:
+        chosen = int(chosen)
+        dist_to_train = cdist(lat_gen[chosen:chosen + 1], lat_train)[0]
+        order = np.argsort(dist_to_train)[: args.top_n]
+        verdict = (
+            f"ratio L={lat_ratio[chosen]:.2f} P={pca_ratio[chosen]:.2f}"
+            f" ({'NUEVO' if rows[chosen]['novel'] else 'parecido a un real'})"
+        )
+        ranking_path = out_dir / f"ranking_gen_{chosen}.png"
+        plot_ranking(gen_images[chosen], X, order, dist_to_train[order], chosen, verdict, ranking_path)
+        print(f"  ranking del generado #{chosen} (ratio L={lat_ratio[chosen]:.2f}) -> {ranking_path}")
 
 
 if __name__ == "__main__":
