@@ -69,6 +69,7 @@ def train_autoencoder(model, X: np.ndarray, config: dict, rng: np.random.Generat
     gradient_clip_norm = training_cfg["gradient_clip_norm"]
     if gradient_clip_norm is not None:
         gradient_clip_norm = float(gradient_clip_norm)
+    progress_every = int(training_cfg.get("progress_every", 0))
 
     optimizer = build_optimizer(
         name=str(model_cfg["optimizer"]),
@@ -160,6 +161,20 @@ def train_autoencoder(model, X: np.ndarray, config: dict, rng: np.random.Generat
                     "all_patterns_within_one_pixel": epoch_metrics["all_patterns_within_one_pixel"],
                 }
             )
+
+        if progress_every and (epoch == 1 or epoch % progress_every == 0):
+            if is_variational:
+                status = (
+                    f"recon={epoch_metrics['reconstruction_loss']:.2f}"
+                    f" kl={epoch_metrics['kl_loss']:.2f}"
+                    f" total={epoch_metrics['total_loss']:.2f}"
+                )
+            else:
+                status = (
+                    f"exact={epoch_metrics['exact_reconstruction_rate']:.3f}"
+                    f" max_err={epoch_metrics['max_pixel_error']}"
+                )
+            print(f"epoch {epoch}/{epochs_max} train_loss={train_loss:.4f} {status}", flush=True)
 
         if best_ranking is None or ranking > best_ranking:
             best_ranking = ranking
