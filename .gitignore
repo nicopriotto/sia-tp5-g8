@@ -219,4 +219,5 @@ __marimo__/
 
 # Project outputs
 autoencoder_basic/output/
+autoencoder_denoising/output/
 experiments/output/
