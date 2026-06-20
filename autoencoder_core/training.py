@@ -5,7 +5,7 @@ from copy import deepcopy
 import numpy as np
 
 from .evaluation import checkpoint_ranking_tuple, evaluate_autoencoder
-from .losses import compute_reconstruction_loss, output_delta
+from .losses import compute_reconstruction_loss, kl_divergence, output_delta
 from .noise import apply_noise
 from .optimizers import build_optimizer
 
@@ -60,6 +60,7 @@ def train_autoencoder(model, X: np.ndarray, config: dict, rng: np.random.Generat
 
     training_cfg = config["training"]
     model_cfg = config["model"]
+    is_variational = hasattr(model, "beta")
     batch_size = int(training_cfg["batch_size"])
     epochs_max = int(training_cfg["epochs_max"])
     patience = int(training_cfg["early_stopping_patience"])
@@ -120,23 +121,45 @@ def train_autoencoder(model, X: np.ndarray, config: dict, rng: np.random.Generat
         mean_l2_penalty = float(np.mean(l2_penalties))
         train_loss = mean_reconstruction_loss + mean_l2_penalty
 
-        selection_input = _selection_inputs(X, config, epoch_seed=int(rng.integers(0, 1_000_000_000)))
-        epoch_metrics = evaluate_autoencoder(model, selection_input, config, target_X=X)
-        ranking = checkpoint_ranking_tuple(epoch_metrics, train_loss)
-
-        history.append(
-            {
-                "epoch": epoch,
-                "train_loss": train_loss,
-                "reconstruction_loss": mean_reconstruction_loss,
-                "l2_penalty": mean_l2_penalty,
-                "mean_pixel_error": epoch_metrics["mean_pixel_error"],
-                "max_pixel_error": epoch_metrics["max_pixel_error"],
-                "exact_reconstruction_rate": epoch_metrics["exact_reconstruction_rate"],
-                "within_one_pixel_rate": epoch_metrics["within_one_pixel_rate"],
-                "all_patterns_within_one_pixel": epoch_metrics["all_patterns_within_one_pixel"],
+        if is_variational:
+            # Pixel-error metrics do not apply to continuous data; select on total loss.
+            eval_cache = model.forward(X, training=False)
+            recon_loss = compute_reconstruction_loss(X, eval_cache["output"], str(model_cfg["loss_function"]))
+            kl_loss = kl_divergence(eval_cache["mu"], eval_cache["logvar"])
+            total_loss = recon_loss + model.beta * kl_loss
+            ranking = (-total_loss,)
+            epoch_metrics = {
+                "reconstruction_loss": recon_loss,
+                "kl_loss": kl_loss,
+                "total_loss": total_loss,
             }
-        )
+            history.append(
+                {
+                    "epoch": epoch,
+                    "train_loss": train_loss,
+                    "reconstruction_loss": recon_loss,
+                    "kl_loss": kl_loss,
+                    "total_loss": total_loss,
+                }
+            )
+        else:
+            selection_input = _selection_inputs(X, config, epoch_seed=int(rng.integers(0, 1_000_000_000)))
+            epoch_metrics = evaluate_autoencoder(model, selection_input, config, target_X=X)
+            ranking = checkpoint_ranking_tuple(epoch_metrics, train_loss)
+
+            history.append(
+                {
+                    "epoch": epoch,
+                    "train_loss": train_loss,
+                    "reconstruction_loss": mean_reconstruction_loss,
+                    "l2_penalty": mean_l2_penalty,
+                    "mean_pixel_error": epoch_metrics["mean_pixel_error"],
+                    "max_pixel_error": epoch_metrics["max_pixel_error"],
+                    "exact_reconstruction_rate": epoch_metrics["exact_reconstruction_rate"],
+                    "within_one_pixel_rate": epoch_metrics["within_one_pixel_rate"],
+                    "all_patterns_within_one_pixel": epoch_metrics["all_patterns_within_one_pixel"],
+                }
+            )
 
         if best_ranking is None or ranking > best_ranking:
             best_ranking = ranking
