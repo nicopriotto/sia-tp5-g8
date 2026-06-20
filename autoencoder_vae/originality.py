@@ -46,7 +46,7 @@ def pca_transform(X_flat: np.ndarray, mean: np.ndarray, components: np.ndarray) 
 # Vecino mas cercano + calibracion estilo AuthPct.
 # --------------------------------------------------------------------------
 
-def nearest_neighbor(query: np.ndarray, ref: np.ndarray, exclude_self: bool = False, chunk: int = 512) -> tuple[np.ndarray, np.ndarray]:
+def nearest_neighbor(query: np.ndarray, ref: np.ndarray, exclude_self: bool = False, chunk: int = 512, label: str | None = None) -> tuple[np.ndarray, np.ndarray]:
     """Para cada fila de query, distancia y argmin contra ref (chunked en memoria)."""
     n = query.shape[0]
     min_dist = np.empty(n, dtype=float)
@@ -59,13 +59,18 @@ def nearest_neighbor(query: np.ndarray, ref: np.ndarray, exclude_self: bool = Fa
                 d[row, start + row] = np.inf
         min_dist[start:end] = d.min(axis=1)
         arg[start:end] = d.argmin(axis=1)
+        if label:
+            print(f"\r    {label}: {end}/{n}", end="", flush=True)
+    if label:
+        print(flush=True)
     return min_dist, arg
 
 
-def originality_in_space(emb_gen: np.ndarray, emb_train: np.ndarray) -> dict:
+def originality_in_space(emb_gen: np.ndarray, emb_train: np.ndarray, space: str = "") -> dict:
     """Distancia generado->original, calibrada contra la densidad local del dataset."""
-    gen_dist, gen_match = nearest_neighbor(emb_gen, emb_train)
-    train_nn_dist, _ = nearest_neighbor(emb_train, emb_train, exclude_self=True)
+    tag = f"[{space}] " if space else ""
+    gen_dist, gen_match = nearest_neighbor(emb_gen, emb_train, label=f"{tag}generados -> originales")
+    train_nn_dist, _ = nearest_neighbor(emb_train, emb_train, exclude_self=True, label=f"{tag}densidad del dataset (real->real)")
     # AuthPct: ratio = d(gen, vecino_real) / d(ese_vecino, su_propio_vecino_real)
     ratio = gen_dist / train_nn_dist[gen_match]
     # percentil de la distancia del generado dentro de las distancias reales-reales
@@ -166,23 +171,29 @@ def main() -> None:
     out_dir = run_dir / "originality"
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    print(f"[1/6] cargando modelo {run_dir.name} y dataset...", flush=True)
     model = load_vae_npz(run_dir / "model.npz")
     X = np.load(REPO_ROOT / "data" / "tensors" / "punks_rgb.npy").astype(np.float32) / 255.0
     X_flat = X.reshape(X.shape[0], -1)
+    print(f"      {X_flat.shape[0]} punks originales cargados", flush=True)
 
+    print(f"[2/6] generando {args.n} punks desde el prior (seed={args.seed})...", flush=True)
     rng = np.random.default_rng(args.seed)
     gen_images = sample_from_prior(model, args.n, rng)
     gen_flat = gen_images.reshape(args.n, -1)
 
-    # embeddings train + generados
+    print("[3/6] calculando embeddings (latente VAE + PCA)...", flush=True)
     lat_train = latent_embeddings(model, X_flat)
     lat_gen = latent_embeddings(model, gen_flat)
     mean, comps = fit_pca(X_flat, args.pca_dim)
     pca_train = pca_transform(X_flat, mean, comps)
     pca_gen = pca_transform(gen_flat, mean, comps)
 
-    latent = originality_in_space(lat_gen, lat_train)
-    pca = originality_in_space(pca_gen, pca_train)
+    print("[4/6] originalidad en espacio LATENTE...", flush=True)
+    latent = originality_in_space(lat_gen, lat_train, space="latente")
+    print("[5/6] originalidad en espacio PCA...", flush=True)
+    pca = originality_in_space(pca_gen, pca_train, space="PCA")
+    print("[6/6] armando reporte, CSV y ranking...", flush=True)
     rows = build_report(latent, pca)
 
     # CSV por muestra
