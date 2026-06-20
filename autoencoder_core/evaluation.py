@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 
 from .dataset import flat_to_grid
+from .noise import apply_noise
 
 
 def threshold_reconstruction(reconstruction_probabilities: np.ndarray, threshold: float) -> np.ndarray:
@@ -115,4 +116,74 @@ def generate_novel_letter(
         "latent_codes": latent_codes,
         "labels": labels,
         "legend": legend,
+    }
+
+
+def evaluate_denoising(
+    model,
+    X_clean: np.ndarray,
+    noise_type: str,
+    noise_level: float,
+    pixel_threshold: float,
+    n_realizations: int = 30,
+    base_seed: int = 777,
+) -> dict:
+    clean_binary = X_clean.astype(int)
+    n_patterns = X_clean.shape[0]
+
+    per_real_mean = np.zeros(n_realizations, dtype=float)
+    per_real_max = np.zeros(n_realizations, dtype=int)
+    per_real_exact = np.zeros(n_realizations, dtype=float)
+    per_real_within_one = np.zeros(n_realizations, dtype=float)
+    per_real_input_mean = np.zeros(n_realizations, dtype=float)
+    overall_pixel_errors = np.zeros(n_patterns, dtype=float)
+
+    sample = None
+    for realization in range(n_realizations):
+        seed = base_seed + realization
+        X_noisy = apply_noise(X_clean, noise_type=noise_type, noise_level=noise_level, seed=seed)
+        probabilities = model.reconstruct(X_noisy)
+        metrics = compute_reconstruction_metrics(X_clean, probabilities, pixel_threshold)
+
+        pixel_errors = np.asarray(metrics["pixel_error_per_pattern"], dtype=float)
+        per_real_mean[realization] = metrics["mean_pixel_error"]
+        per_real_max[realization] = metrics["max_pixel_error"]
+        per_real_exact[realization] = metrics["exact_reconstruction_rate"]
+        per_real_within_one[realization] = metrics["within_one_pixel_rate"]
+        overall_pixel_errors += pixel_errors
+
+        input_binary = threshold_reconstruction(X_noisy, pixel_threshold)
+        input_pixel_error = np.abs(input_binary - clean_binary).sum(axis=1)
+        per_real_input_mean[realization] = float(np.mean(input_pixel_error))
+
+        if sample is None:
+            sample = {
+                "noisy": X_noisy.copy(),
+                "reconstruction_binary": metrics["reconstruction_binary"],
+                "reconstruction_probabilities": metrics["reconstruction_probabilities"],
+            }
+
+    overall_pixel_errors /= n_realizations
+    max_pixel_error = int(np.max(per_real_max))
+    input_mean_pixel_error = float(np.mean(per_real_input_mean))
+    output_mean_pixel_error = float(np.mean(per_real_mean))
+
+    return {
+        "mean_pixel_error": output_mean_pixel_error,
+        "max_pixel_error": max_pixel_error,
+        "exact_reconstruction_rate": float(np.mean(per_real_exact)),
+        "within_one_pixel_rate": float(np.mean(per_real_within_one)),
+        "all_patterns_within_one_pixel": bool(max_pixel_error <= 1),
+        "pixel_error_per_pattern": overall_pixel_errors.tolist(),
+        "noise_type": noise_type,
+        "noise_level": float(noise_level),
+        "n_realizations": int(n_realizations),
+        "input_mean_pixel_error": input_mean_pixel_error,
+        "denoising_gain": input_mean_pixel_error - output_mean_pixel_error,
+        "per_realization_mean_pixel_error": per_real_mean.tolist(),
+        "per_realization_max_pixel_error": per_real_max.astype(int).tolist(),
+        "per_realization_exact_reconstruction_rate": per_real_exact.tolist(),
+        "sample_noisy": sample["noisy"],
+        "sample_reconstruction_binary": sample["reconstruction_binary"],
+        "sample_reconstruction_probabilities": sample["reconstruction_probabilities"],
     }

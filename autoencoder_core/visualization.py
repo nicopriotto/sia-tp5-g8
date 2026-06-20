@@ -66,6 +66,66 @@ def plot_reconstructions(
     plt.close(fig)
 
 
+def plot_denoising_triplets(
+    original_X: np.ndarray,
+    noisy_X: np.ndarray,
+    reconstruction_binary: np.ndarray,
+    labels: list[str],
+    output_path: str | Path,
+) -> None:
+    path = Path(output_path)
+    n_rows = original_X.shape[0]
+    fig, axes = plt.subplots(n_rows, 3, figsize=(9, max(2, 1.7 * n_rows)))
+    axes = np.atleast_2d(axes)
+
+    for row_idx, label in enumerate(labels):
+        original_grid = flat_to_grid(original_X[row_idx]).astype(int)
+        noisy_grid = noisy_X[row_idx].reshape(7, 5)
+        recon_grid = flat_to_grid(reconstruction_binary[row_idx]).astype(int)
+        _draw_grid(axes[row_idx, 0], original_grid, f"{label} original")
+        axes[row_idx, 1].imshow(noisy_grid, cmap="binary", vmin=0.0, vmax=1.0)
+        axes[row_idx, 1].set_title(f"{label} noisy", fontsize=9)
+        axes[row_idx, 1].set_xticks(range(5))
+        axes[row_idx, 1].set_yticks(range(7))
+        _draw_grid(axes[row_idx, 2], recon_grid, f"{label} denoised")
+
+    fig.tight_layout()
+    fig.savefig(path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+
+def plot_denoising_curve(
+    noise_levels: list[float],
+    input_mean_pixel_error: list[float],
+    output_mean_pixel_error: list[float],
+    exact_reconstruction_rate: list[float],
+    output_path: str | Path,
+    title: str = "Denoising capacity vs noise level",
+) -> None:
+    path = Path(output_path)
+    fig, (ax_err, ax_exact) = plt.subplots(1, 2, figsize=(12, 5))
+
+    ax_err.plot(noise_levels, input_mean_pixel_error, marker="o", label="Input (noisy)")
+    ax_err.plot(noise_levels, output_mean_pixel_error, marker="o", label="Output (denoised)")
+    ax_err.set_title("Mean pixel error")
+    ax_err.set_xlabel("noise_level")
+    ax_err.set_ylabel("mean pixel error per pattern")
+    ax_err.legend(loc="best")
+    ax_err.grid(alpha=0.3)
+
+    ax_exact.plot(noise_levels, exact_reconstruction_rate, marker="o", color="tab:green")
+    ax_exact.set_title("Exact reconstruction rate")
+    ax_exact.set_xlabel("noise_level")
+    ax_exact.set_ylabel("fraction recovered exactly")
+    ax_exact.set_ylim(-0.02, 1.02)
+    ax_exact.grid(alpha=0.3)
+
+    fig.suptitle(title)
+    fig.tight_layout()
+    fig.savefig(path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+
 def plot_generated_letter(
     latent_codes: np.ndarray,
     labels: list[str],
