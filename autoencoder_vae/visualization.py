@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from pathlib import Path
 
@@ -23,6 +22,7 @@ from autoencoder_vae.generation import (
     reconstruct,
     sample_from_prior,
 )
+from autoencoder_vae.dataset import load_run_dataset_split
 from autoencoder_vae.model import VariationalAutoencoder
 
 
@@ -35,13 +35,19 @@ def _show_row(axes, images: np.ndarray, ylabel: str | None = None) -> None:
         axes[0].set_ylabel(ylabel, fontsize=11)
 
 
-def plot_reconstructions(model: VariationalAutoencoder, X_flat: np.ndarray, n: int, output_path: Path) -> None:
+def plot_reconstructions(
+    model: VariationalAutoencoder,
+    X_flat: np.ndarray,
+    n: int,
+    output_path: Path,
+    title: str,
+) -> None:
     originals = flat_to_images(X_flat[:n])
     recons = reconstruct(model, X_flat[:n])
     fig, axes = plt.subplots(2, n, figsize=(n * 1.2, 2.6))
     _show_row(axes[0], originals, "original")
     _show_row(axes[1], recons, "reconstrucción")
-    fig.suptitle("VAE — reconstrucción de punks de entrenamiento")
+    fig.suptitle(title)
     fig.savefig(output_path, dpi=110, bbox_inches="tight")
     plt.close(fig)
 
@@ -86,18 +92,6 @@ def plot_latent_pca(model: VariationalAutoencoder, X_flat: np.ndarray, output_pa
     plt.close(fig)
 
 
-def load_run_dataset(run_dir: Path) -> np.ndarray:
-    """Load the same dataset the run was trained on, from its resolved_config.json."""
-    config = json.loads((run_dir / "resolved_config.json").read_text(encoding="utf-8"))
-    dataset_cfg = config["dataset"]
-    raw = np.load(dataset_cfg["tensor_path"]).astype(np.float32) / 255.0
-    X = raw.reshape(raw.shape[0], -1)
-    limit = dataset_cfg.get("limit")
-    if limit is not None:
-        X = X[: int(limit)]
-    return X
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Plot VAE reconstructions, samples and latent structure.")
     parser.add_argument(
@@ -115,13 +109,45 @@ def main() -> None:
     args = parse_args()
     run_dir = Path(args.run_dir)
     model = load_vae_npz(run_dir / "model.npz")
-    X = load_run_dataset(run_dir)
+    _, dataset_split = load_run_dataset_split(run_dir)
     rng = np.random.default_rng(args.seed)
 
-    plot_reconstructions(model, X, min(8, X.shape[0]), run_dir / "reconstructions.png")
+    train_flat = dataset_split.train_flat
+    validation_flat = dataset_split.validation_flat
+    all_flat = dataset_split.flat
+
+    plot_reconstructions(
+        model,
+        train_flat,
+        min(8, train_flat.shape[0]),
+        run_dir / "reconstructions.png",
+        "VAE — reconstrucción de punks de entrenamiento",
+    )
+    if dataset_split.validation_size:
+        plot_reconstructions(
+            model,
+            train_flat,
+            min(8, train_flat.shape[0]),
+            run_dir / "reconstructions_train.png",
+            "VAE — reconstrucción del split de entrenamiento",
+        )
+        plot_reconstructions(
+            model,
+            validation_flat,
+            min(8, validation_flat.shape[0]),
+            run_dir / "reconstructions_validation.png",
+            "VAE — reconstrucción del split de validación",
+        )
     plot_generated_grid(sample_from_prior(model, args.samples, rng), run_dir / "generated_grid.png")
-    plot_interpolation(model, X[0], X[1], steps=8, output_path=run_dir / "interpolation.png")
-    plot_latent_pca(model, X, run_dir / "latent_pca.png")
+    interpolation_source = train_flat if train_flat.shape[0] >= 2 else all_flat
+    plot_interpolation(
+        model,
+        interpolation_source[0],
+        interpolation_source[1],
+        steps=8,
+        output_path=run_dir / "interpolation.png",
+    )
+    plot_latent_pca(model, all_flat, run_dir / "latent_pca.png")
 
     print(f"Wrote reconstructions, generated_grid, interpolation and latent_pca to {run_dir}")
 

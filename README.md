@@ -17,7 +17,7 @@ autoencoder_denoising/   denoising autoencoder (1b)
 autoencoder_vae/         autoencoder variacional sobre cryptopunks (2)
 experiments/             barridos multi-seed de hiperparámetros
 data/raw/font.h          dataset de letras (1)
-data/tensors/            tensores de cryptopunks para el VAE (2)
+data/data_punks_bundle/  dataset y tensores de cryptopunks para el VAE (2)
 docs/                    consigna y material teórico
 ```
 
@@ -95,7 +95,8 @@ limpias, tríos (original / con ruido / reconstruido) y pesos del modelo.
 
 El punto 2 extiende el autoencoder a un esquema variacional sobre un dataset nuevo: los
 **CryptoPunks**, pixel art de 24×24 píxeles RGB (1728 valores por imagen, normalizados a
-[0, 1]). La preparación del dataset está en `data/README.md`.
+[0, 1]). La preparación del dataset está en `data/data_punks_bundle/README.md` y el script real
+de preprocesado es `data/data_punks_bundle/preprocess.py`.
 
 Un autoencoder común aprende un espacio latente irregular y con huecos: un punto al azar no
 decodifica en algo válido, así que no sirve para generar. El VAE lo resuelve haciendo que el
@@ -128,15 +129,20 @@ imágenes a color continuas).
 Correr:
 
 ```bash
+python3 data/data_punks_bundle/preprocess.py                        # genera el tensor si falta
 python3 autoencoder_vae/main.py                                      # entrena (config base.json)
 python3 autoencoder_vae/main.py autoencoder_vae/configs/quick.json   # iteración rápida (subset)
 python3 autoencoder_vae/generation.py autoencoder_vae/output/base    # genera punks nuevos (2c)
 python3 autoencoder_vae/visualization.py autoencoder_vae/output/base # figuras de análisis
+python3 autoencoder_vae/originality.py autoencoder_vae/output/base   # originalidad vs. split train
 ```
 
 `main.py` entrena y guarda métricas, historia y pesos. `generation.py` samplea del prior y
 guarda los punks generados (PNGs individuales + grilla). `visualization.py` produce las figuras de
 reconstrucción, muestras generadas, interpolación latente y proyección PCA del espacio latente.
+Cuando la corrida tiene `validation_fraction > 0`, además genera reconstrucciones separadas para
+`train` y `validation`. `originality.py` usa por defecto el split de entrenamiento como referencia
+para medir novedad (`--reference-split train|all`).
 
 ## Experimentos
 
@@ -155,6 +161,9 @@ bash experiments/denoising/run_all.sh formal
 # VAE: barrido de beta y de dimensión latente
 bash experiments/vae/run_all.sh quick
 bash experiments/vae/run_all.sh formal
+
+# VAE: elección de cantidad de épocas luego de fijar beta y latent_dim
+python3 experiments/vae/epochs.py --mode quick --config path/to/chosen_config.json
 ```
 
 El barrido `experiments/denoising/noise_level.py` recorre varios niveles para cada tipo de
@@ -163,7 +172,20 @@ contra el de salida y la tasa de reconstrucción exacta a medida que aumenta el 
 
 Los barridos del VAE (`experiments/vae/beta.py` y `latent_dim.py`) comparan la loss de
 reconstrucción, la KL y la loss total entre valores de `beta` y dimensiones latentes; usan un
-subconjunto de punks y menos épocas para que el barrido sea factible.
+subconjunto de 2000 punks, `validation_fraction = 0.1`, hasta 60 épocas y early stopping con
+patience 15. `comparison.csv` y `comparison.png` priorizan la loss total de validación como
+métrica principal. El experimento `experiments/vae/epochs.py` toma la config elegida, la vuelve a
+entrenar sobre subset + validation hasta 120 épocas, agrega la curva `validation_total_loss` entre
+seeds y guarda `recommended_epoch.json`.
+
+Workflow recomendado para el VAE:
+
+1. generar el tensor si falta con `python3 data/data_punks_bundle/preprocess.py`
+2. correr `bash experiments/vae/run_all.sh quick` o `formal` para elegir `beta` y `latent_dim`
+3. correr `python3 experiments/vae/epochs.py --config ... --mode quick|formal`
+4. entrenar el modelo final sobre 100% del dataset con `validation_fraction = 0.0`, `epochs_max = recommended_epoch` y `early_stopping_patience >= recommended_epoch`
+5. generar figuras con `autoencoder_vae/visualization.py`
+6. medir originalidad con `autoencoder_vae/originality.py`
 
 ## Configuración
 

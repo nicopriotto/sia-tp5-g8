@@ -18,7 +18,8 @@ REPO_ROOT = THIS_DIR.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from autoencoder_vae.generation import IMAGE_SHAPE, flat_to_images, load_vae_npz, sample_from_prior
+from autoencoder_vae.dataset import load_run_dataset_split
+from autoencoder_vae.generation import load_vae_npz, sample_from_prior
 
 
 # --------------------------------------------------------------------------
@@ -119,7 +120,7 @@ def histogram_similarity(img_a: np.ndarray, img_b: np.ndarray) -> float:
 # Reporte y ranking
 # --------------------------------------------------------------------------
 
-def build_report(latent: dict, pca: dict) -> list[dict]:
+def build_report(latent: dict, pca: dict, reference_indices: np.ndarray) -> list[dict]:
     rows = []
     for i in range(len(latent["dist"])):
         lat_novel = latent["ratio"][i] >= 1.0
@@ -127,11 +128,11 @@ def build_report(latent: dict, pca: dict) -> list[dict]:
         rows.append({
             "gen_idx": i,
             "latent_dist": round(float(latent["dist"][i]), 4),
-            "latent_match": int(latent["match"][i]),
+            "latent_match": int(reference_indices[int(latent["match"][i])]),
             "latent_ratio": round(float(latent["ratio"][i]), 3),
             "latent_pctile": round(float(latent["percentile"][i]), 1),
             "pca_dist": round(float(pca["dist"][i]), 4),
-            "pca_match": int(pca["match"][i]),
+            "pca_match": int(reference_indices[int(pca["match"][i])]),
             "pca_ratio": round(float(pca["ratio"][i]), 3),
             "pca_pctile": round(float(pca["percentile"][i]), 1),
             "novel": bool(lat_novel and pca_novel),
@@ -139,7 +140,16 @@ def build_report(latent: dict, pca: dict) -> list[dict]:
     return rows
 
 
-def plot_ranking(gen_img: np.ndarray, originals: np.ndarray, neighbor_idx: np.ndarray, dists: np.ndarray, gen_idx: int, verdict: str, output_path: Path) -> None:
+def plot_ranking(
+    gen_img: np.ndarray,
+    originals: np.ndarray,
+    original_indices: np.ndarray,
+    neighbor_idx: np.ndarray,
+    dists: np.ndarray,
+    gen_idx: int,
+    verdict: str,
+    output_path: Path,
+) -> None:
     top_n = len(neighbor_idx)
     fig, axes = plt.subplots(1, top_n + 1, figsize=((top_n + 1) * 1.25, 1.9))
     axes[0].imshow(np.clip(gen_img, 0, 1))
@@ -147,7 +157,7 @@ def plot_ranking(gen_img: np.ndarray, originals: np.ndarray, neighbor_idx: np.nd
     axes[0].axis("off")
     for rank, (idx, ax) in enumerate(zip(neighbor_idx, axes[1:]), start=1):
         ax.imshow(np.clip(originals[idx], 0, 1))
-        ax.set_title(f"#{rank}: punk {idx}\nd={dists[rank - 1]:.2f}", fontsize=7)
+        ax.set_title(f"#{rank}: punk {int(original_indices[idx])}\nd={dists[rank - 1]:.2f}", fontsize=7)
         ax.axis("off")
     fig.suptitle("Originales más parecidos al generado (ranking por latente)", fontsize=9)
     fig.savefig(output_path, dpi=120, bbox_inches="tight")
@@ -163,6 +173,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--rankings", type=int, default=10, help="Cuántas imágenes de ranking generar (los N generados más originales).")
     parser.add_argument("--index", type=int, default=None, help="Rankear solo este generado (sobrescribe --rankings).")
     parser.add_argument("--pca-dim", type=int, default=50, help="Componentes PCA del embedding sobre píxeles.")
+    parser.add_argument(
+        "--reference-split",
+        choices=["train", "all"],
+        default=None,
+        help="Qué split usar como referencia para originalidad. Por defecto usa train si existe validación, o all si no.",
+    )
     return parser.parse_args()
 
 
@@ -174,9 +190,25 @@ def main() -> None:
 
     print(f"[1/6] cargando modelo {run_dir.name} y dataset...", flush=True)
     model = load_vae_npz(run_dir / "model.npz")
-    X = np.load(REPO_ROOT / "data" / "tensors" / "punks_rgb.npy").astype(np.float32) / 255.0
-    X_flat = X.reshape(X.shape[0], -1)
-    print(f"      {X_flat.shape[0]} punks originales cargados", flush=True)
+    _, dataset_split = load_run_dataset_split(run_dir)
+    if args.reference_split is None:
+        reference_split = "train" if dataset_split.validation_size else "all"
+    else:
+        reference_split = args.reference_split
+
+    if reference_split == "train":
+        reference_images = dataset_split.train_images
+        reference_flat = dataset_split.train_flat
+        reference_indices = dataset_split.train_indices
+    else:
+        reference_images = dataset_split.images
+        reference_flat = dataset_split.flat
+        reference_indices = dataset_split.selected_indices
+    print(
+        f"      {reference_flat.shape[0]} punks originales cargados"
+        f" (referencia={reference_split})",
+        flush=True,
+    )
 
     print(f"[2/6] generando {args.n} punks desde el prior (seed={args.seed})...", flush=True)
     rng = np.random.default_rng(args.seed)
@@ -184,10 +216,10 @@ def main() -> None:
     gen_flat = gen_images.reshape(args.n, -1)
 
     print("[3/6] calculando embeddings (latente VAE + PCA)...", flush=True)
-    lat_train = latent_embeddings(model, X_flat)
+    lat_train = latent_embeddings(model, reference_flat)
     lat_gen = latent_embeddings(model, gen_flat)
-    mean, comps = fit_pca(X_flat, args.pca_dim)
-    pca_train = pca_transform(X_flat, mean, comps)
+    mean, comps = fit_pca(reference_flat, args.pca_dim)
+    pca_train = pca_transform(reference_flat, mean, comps)
     pca_gen = pca_transform(gen_flat, mean, comps)
 
     print("[4/6] originalidad en espacio LATENTE...", flush=True)
@@ -195,7 +227,7 @@ def main() -> None:
     print("[5/6] originalidad en espacio PCA...", flush=True)
     pca = originality_in_space(pca_gen, pca_train, space="PCA")
     print("[6/6] armando reporte, CSV y ranking...", flush=True)
-    rows = build_report(latent, pca)
+    rows = build_report(latent, pca, reference_indices)
 
     # CSV por muestra
     csv_path = out_dir / "originality.csv"
@@ -229,7 +261,16 @@ def main() -> None:
             f" ({'NUEVO' if rows[chosen]['novel'] else 'parecido a un real'})"
         )
         ranking_path = out_dir / f"ranking_gen_{chosen}.png"
-        plot_ranking(gen_images[chosen], X, order, dist_to_train[order], chosen, verdict, ranking_path)
+        plot_ranking(
+            gen_images[chosen],
+            reference_images,
+            reference_indices,
+            order,
+            dist_to_train[order],
+            chosen,
+            verdict,
+            ranking_path,
+        )
         print(f"  ranking del generado #{chosen} (ratio L={lat_ratio[chosen]:.2f}) -> {ranking_path}")
 
 

@@ -2,11 +2,24 @@ from __future__ import annotations
 
 import csv
 import json
+from math import ceil
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 
+
+DEFAULT_METRIC_SPECS = [
+    ("full_success_rate_mean", "full_success_rate_std", "Full Success Rate", "tab:green"),
+    ("exact_reconstruction_rate_mean", "exact_reconstruction_rate_std", "Exact Reconstruction Rate", "tab:blue"),
+    ("mean_pixel_error_mean", "mean_pixel_error_std", "Mean Pixel Error", "tab:orange"),
+    ("max_pixel_error_mean", "max_pixel_error_std", "Max Pixel Error", "tab:red"),
+]
+
+BASIC_METRIC_SPECS = [
+    ("full_success_rate_mean", "full_success_rate_std", "Full Success Rate (↑)", "tab:green"),
+    ("max_pixel_error_mean", "max_pixel_error_std", "Max Pixel Error (↓)", "tab:red"),
+]
 
 SUMMARY_FIELDS = [
     "experiment",
@@ -110,18 +123,23 @@ def write_comparison_csv(output_path: str | Path, rows: list[dict]) -> None:
         writer.writerows(rows)
 
 
-def plot_comparison(output_path: str | Path, rows: list[dict], experiment: str) -> None:
+def plot_comparison(
+    output_path: str | Path,
+    rows: list[dict],
+    experiment: str,
+    metric_specs: list[tuple] | None = None,
+) -> None:
+    if metric_specs is None:
+        metric_specs = DEFAULT_METRIC_SPECS
+
     names = [row["variant"] for row in rows]
     x = np.arange(len(names))
+    n = len(metric_specs)
+    ncols = 2 if n > 1 else 1
+    nrows = ceil(n / ncols)
 
-    fig, axes = plt.subplots(2, 2, figsize=(max(12, 1.4 * len(names)), 8))
-    axes = axes.ravel()
-    metric_specs = [
-        ("full_success_rate_mean", "full_success_rate_std", "Full Success Rate", "tab:green"),
-        ("exact_reconstruction_rate_mean", "exact_reconstruction_rate_std", "Exact Reconstruction Rate", "tab:blue"),
-        ("mean_pixel_error_mean", "mean_pixel_error_std", "Mean Pixel Error", "tab:orange"),
-        ("max_pixel_error_mean", "max_pixel_error_std", "Max Pixel Error", "tab:red"),
-    ]
+    fig, axes = plt.subplots(nrows, ncols, figsize=(max(12, 1.4 * len(names)), 4.0 * nrows))
+    axes = np.array(axes).ravel()
 
     for ax, (mean_key, std_key, title, color) in zip(axes, metric_specs):
         means = [row[mean_key] for row in rows]
@@ -130,6 +148,9 @@ def plot_comparison(output_path: str | Path, rows: list[dict], experiment: str) 
         ax.set_title(title)
         ax.set_xticks(x)
         ax.set_xticklabels(names, rotation=30, ha="right")
+
+    for ax in axes[n:]:
+        ax.set_visible(False)
 
     fig.suptitle(experiment)
     fig.tight_layout()

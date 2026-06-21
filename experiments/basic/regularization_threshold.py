@@ -15,7 +15,7 @@ EXPERIMENT = "regularization_threshold"
 
 def main() -> None:
     args = parse_mode_args("Compare L2, gradient clipping and pixel-threshold variants.")
-    base_config, base_config_path = load_base_config()
+    base_config, base_config_path = load_base_config(args.mode)
     variants = [
         ("l2_0", {"training": {"l2_weight_decay": 0.0}}),
         ("l2_1e5", {"training": {"l2_weight_decay": 1e-5}}),

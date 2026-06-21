@@ -55,7 +55,25 @@ def _selection_inputs(X: np.ndarray, config: dict, epoch_seed: int) -> np.ndarra
     )
 
 
-def train_autoencoder(model, X: np.ndarray, config: dict, rng: np.random.Generator) -> dict:
+def _vae_epoch_metrics(model, X: np.ndarray, loss_name: str) -> dict:
+    eval_cache = model.forward(X, training=False)
+    reconstruction_loss = compute_reconstruction_loss(X, eval_cache["output"], loss_name)
+    kl_loss = kl_divergence(eval_cache["mu"], eval_cache["logvar"])
+    return {
+        "reconstruction_loss": reconstruction_loss,
+        "kl_loss": kl_loss,
+        "total_loss": reconstruction_loss + model.beta * kl_loss,
+    }
+
+
+def train_autoencoder(
+    model,
+    X: np.ndarray,
+    config: dict,
+    rng: np.random.Generator,
+    selection_X: np.ndarray | None = None,
+    selection_target_X: np.ndarray | None = None,
+) -> dict:
     model.set_rng(rng)
 
     training_cfg = config["training"]
@@ -70,6 +88,9 @@ def train_autoencoder(model, X: np.ndarray, config: dict, rng: np.random.Generat
     if gradient_clip_norm is not None:
         gradient_clip_norm = float(gradient_clip_norm)
     progress_every = int(training_cfg.get("progress_every", 0))
+    selection_metric = "validation_total_loss" if is_variational and selection_X is not None else "total_loss"
+    if not is_variational:
+        selection_metric = "checkpoint_ranking_tuple"
 
     optimizer = build_optimizer(
         name=str(model_cfg["optimizer"]),
@@ -80,6 +101,7 @@ def train_autoencoder(model, X: np.ndarray, config: dict, rng: np.random.Generat
     best_state = model.clone_parameters()
     best_epoch = 1
     best_ranking = None
+    best_early_stopping_score = None
     best_metrics = None
     best_train_loss = None
     epochs_without_improvement = 0
@@ -87,6 +109,7 @@ def train_autoencoder(model, X: np.ndarray, config: dict, rng: np.random.Generat
 
     target_X = X.copy() if bool(config["denoising"]["train_with_clean_target"]) else None
     train_target = X if target_X is None else target_X
+    selection_target = (X if selection_X is None else selection_X) if selection_target_X is None else selection_target_X
 
     for epoch in range(1, epochs_max + 1):
         train_input = _denoising_train_inputs(X, config, epoch_seed=int(rng.integers(0, 1_000_000_000)))
@@ -123,30 +146,41 @@ def train_autoencoder(model, X: np.ndarray, config: dict, rng: np.random.Generat
         train_loss = mean_reconstruction_loss + mean_l2_penalty
 
         if is_variational:
-            # Pixel-error metrics do not apply to continuous data; select on total loss.
-            eval_cache = model.forward(X, training=False)
-            recon_loss = compute_reconstruction_loss(X, eval_cache["output"], str(model_cfg["loss_function"]))
-            kl_loss = kl_divergence(eval_cache["mu"], eval_cache["logvar"])
-            total_loss = recon_loss + model.beta * kl_loss
-            ranking = (-total_loss,)
-            epoch_metrics = {
-                "reconstruction_loss": recon_loss,
-                "kl_loss": kl_loss,
-                "total_loss": total_loss,
+            train_metrics = _vae_epoch_metrics(model, X, str(model_cfg["loss_function"]))
+            selected_metrics = train_metrics
+            history_row = {
+                "epoch": epoch,
+                "train_loss": train_loss,
+                "reconstruction_loss": train_metrics["reconstruction_loss"],
+                "kl_loss": train_metrics["kl_loss"],
+                "total_loss": train_metrics["total_loss"],
+                "train_reconstruction_loss": train_metrics["reconstruction_loss"],
+                "train_kl_loss": train_metrics["kl_loss"],
+                "train_total_loss": train_metrics["total_loss"],
             }
-            history.append(
-                {
-                    "epoch": epoch,
-                    "train_loss": train_loss,
-                    "reconstruction_loss": recon_loss,
-                    "kl_loss": kl_loss,
-                    "total_loss": total_loss,
-                }
-            )
+            if selection_X is not None:
+                validation_metrics = _vae_epoch_metrics(model, selection_X, str(model_cfg["loss_function"]))
+                selected_metrics = validation_metrics
+                history_row["reconstruction_loss"] = validation_metrics["reconstruction_loss"]
+                history_row["kl_loss"] = validation_metrics["kl_loss"]
+                history_row["total_loss"] = validation_metrics["total_loss"]
+                history_row["validation_reconstruction_loss"] = validation_metrics["reconstruction_loss"]
+                history_row["validation_kl_loss"] = validation_metrics["kl_loss"]
+                history_row["validation_total_loss"] = validation_metrics["total_loss"]
+            ranking = (-selected_metrics["total_loss"],)
+            early_stopping_score = -selected_metrics["total_loss"]
+            epoch_metrics = deepcopy(history_row)
+            history.append(history_row)
         else:
-            selection_input = _selection_inputs(X, config, epoch_seed=int(rng.integers(0, 1_000_000_000)))
-            epoch_metrics = evaluate_autoencoder(model, selection_input, config, target_X=X)
+            selection_base = X if selection_X is None else selection_X
+            selection_input = _selection_inputs(
+                selection_base,
+                config,
+                epoch_seed=int(rng.integers(0, 1_000_000_000)),
+            )
+            epoch_metrics = evaluate_autoencoder(model, selection_input, config, target_X=selection_target)
             ranking = checkpoint_ranking_tuple(epoch_metrics, train_loss)
+            early_stopping_score = -train_loss
 
             history.append(
                 {
@@ -164,11 +198,17 @@ def train_autoencoder(model, X: np.ndarray, config: dict, rng: np.random.Generat
 
         if progress_every and (epoch == 1 or epoch % progress_every == 0):
             if is_variational:
-                status = (
-                    f"recon={epoch_metrics['reconstruction_loss']:.2f}"
-                    f" kl={epoch_metrics['kl_loss']:.2f}"
-                    f" total={epoch_metrics['total_loss']:.2f}"
-                )
+                if selection_X is not None:
+                    status = (
+                        f"train_total={epoch_metrics['train_total_loss']:.2f}"
+                        f" val_total={epoch_metrics['validation_total_loss']:.2f}"
+                    )
+                else:
+                    status = (
+                        f"recon={epoch_metrics['reconstruction_loss']:.2f}"
+                        f" kl={epoch_metrics['kl_loss']:.2f}"
+                        f" total={epoch_metrics['total_loss']:.2f}"
+                    )
             else:
                 status = (
                     f"exact={epoch_metrics['exact_reconstruction_rate']:.3f}"
@@ -176,12 +216,23 @@ def train_autoencoder(model, X: np.ndarray, config: dict, rng: np.random.Generat
                 )
             print(f"epoch {epoch}/{epochs_max} train_loss={train_loss:.4f} {status}", flush=True)
 
-        if best_ranking is None or ranking > best_ranking:
+        checkpoint_improved = best_ranking is None or ranking > best_ranking
+        early_stopping_improved = (
+            best_early_stopping_score is None
+            or early_stopping_score > best_early_stopping_score
+        )
+
+        if checkpoint_improved:
             best_ranking = ranking
             best_state = model.clone_parameters()
             best_epoch = epoch
             best_metrics = deepcopy(epoch_metrics)
             best_train_loss = train_loss
+
+        if early_stopping_improved:
+            best_early_stopping_score = early_stopping_score
+
+        if checkpoint_improved or early_stopping_improved:
             epochs_without_improvement = 0
         else:
             epochs_without_improvement += 1
@@ -196,5 +247,7 @@ def train_autoencoder(model, X: np.ndarray, config: dict, rng: np.random.Generat
         "best_epoch": best_epoch,
         "epochs_trained": len(history),
         "best_metrics": best_metrics,
+        "best_history": deepcopy(history[best_epoch - 1]),
         "best_train_loss": best_train_loss,
+        "selection_metric": selection_metric,
     }

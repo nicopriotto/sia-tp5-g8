@@ -1,8 +1,10 @@
 {
   "dataset": {
-    "tensor_path": "../../data/tensors/punks_rgb.npy",
+    "tensor_path": "../../data/data_punks_bundle/tensors/punks_rgb.npy",
     "limit": 1000,
-    "seed": 38200
+    "seed": 38200,
+    "validation_fraction": 0.0,
+    "split_seed": null
   },
   "model": {
     "input_dim": 1728,

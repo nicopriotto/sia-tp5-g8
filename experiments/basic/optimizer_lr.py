@@ -16,7 +16,7 @@ LEARNING_RATES = [1e-4, 3e-4, 1e-3, 3e-3, 1e-2]
 
 def main() -> None:
     args = parse_mode_args("Compare optimizer and learning-rate variants.")
-    base_config, base_config_path = load_base_config()
+    base_config, base_config_path = load_base_config(args.mode)
 
     variants = []
     for optimizer in ("adam", "sgd_momentum"):

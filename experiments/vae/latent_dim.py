@@ -18,9 +18,9 @@ from experiments.shared.vae_utils import (
 EXPERIMENT = "latent_dim"
 LATENT_DIMS = [2, 4, 8, 16, 32]
 
-# Reduced dataset/epochs so the full sweep is feasible; architecture matches base.json.
+# Reduced dataset plus validation split so the full sweep is feasible and comparable.
 COMMON_OVERRIDE = {
-    "dataset": {"limit": 2000},
+    "dataset": {"limit": 2000, "validation_fraction": 0.1},
     "training": {"epochs_max": 60, "early_stopping_patience": 15},
 }
 

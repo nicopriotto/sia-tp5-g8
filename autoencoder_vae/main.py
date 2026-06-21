@@ -16,6 +16,11 @@ if str(REPO_ROOT) not in sys.path:
 
 from autoencoder_core.serialization import save_model_npz
 from autoencoder_core.training import train_autoencoder
+from autoencoder_vae.dataset import (
+    normalize_dataset_config,
+    prepare_dataset_split,
+    write_dataset_manifest,
+)
 from autoencoder_vae.model import VariationalAutoencoder
 
 DEFAULT_CONFIG = THIS_DIR / "configs" / "base.json"
@@ -30,6 +35,7 @@ def load_config(config_path: str | Path | None) -> tuple[dict, Path]:
 
 def resolve_config_paths(config: dict, config_path: Path) -> dict:
     resolved = deepcopy(config)
+    resolved["dataset"] = normalize_dataset_config(resolved["dataset"])
     tensor_path = Path(resolved["dataset"]["tensor_path"])
     if not tensor_path.is_absolute():
         tensor_path = (config_path.parent / tensor_path).resolve()
@@ -39,17 +45,6 @@ def resolve_config_paths(config: dict, config_path: Path) -> dict:
 
 def default_output_dir(config_path: Path) -> Path:
     return THIS_DIR / "output" / config_path.stem
-
-
-def load_dataset(config: dict) -> np.ndarray:
-    """Load the punks tensor, normalize to [0, 1] and flatten to (N, input_dim)."""
-    dataset_cfg = config["dataset"]
-    raw = np.load(dataset_cfg["tensor_path"]).astype(np.float32) / 255.0
-    X = raw.reshape(raw.shape[0], -1)
-    limit = dataset_cfg.get("limit")
-    if limit is not None:
-        X = X[: int(limit)]
-    return X
 
 
 def build_model(config: dict, seed: int) -> VariationalAutoencoder:
@@ -72,7 +67,7 @@ def write_history_csv(history: list[dict], output_path: str | Path) -> None:
     path = Path(output_path)
     if not history:
         raise ValueError("Training history is empty")
-    fieldnames = ["epoch", "train_loss", "reconstruction_loss", "kl_loss", "total_loss"]
+    fieldnames = list(history[0].keys())
     with path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
@@ -87,24 +82,34 @@ def run_vae(config: dict, config_path: Path, output_dir: str | Path) -> dict:
     run_seed = int(resolved_config["dataset"]["seed"])
     rng = np.random.default_rng(run_seed)
 
-    X = load_dataset(resolved_config)
+    dataset_split = prepare_dataset_split(resolved_config)
     model = build_model(resolved_config, seed=run_seed)
-    training_result = train_autoencoder(model, X, resolved_config, rng)
-
-    best_history = training_result["history"][training_result["best_epoch"] - 1]
+    validation_X = dataset_split.validation_flat if dataset_split.validation_size else None
+    training_result = train_autoencoder(
+        model,
+        dataset_split.train_flat,
+        resolved_config,
+        rng,
+        selection_X=validation_X,
+    )
+    best_history = training_result["best_history"]
 
     resolved_config_json = deepcopy(resolved_config)
     resolved_config_json["output_dir"] = str(output_path.resolve())
     (output_path / "resolved_config.json").write_text(json.dumps(resolved_config_json, indent=2), encoding="utf-8")
+    write_dataset_manifest(dataset_split, output_path / "dataset_manifest.json")
 
     metrics = {
         "seed": run_seed,
-        "n_samples": int(X.shape[0]),
-        "input_dim": int(X.shape[1]),
+        "n_samples": int(dataset_split.n_samples),
+        "n_train_samples": int(dataset_split.train_size),
+        "n_validation_samples": int(dataset_split.validation_size),
+        "input_dim": int(dataset_split.flat.shape[1]),
         "latent_dim": int(resolved_config["model"]["latent_dim"]),
         "beta": float(resolved_config["model"]["beta"]),
         "epochs_trained": training_result["epochs_trained"],
         "best_epoch": training_result["best_epoch"],
+        "selection_metric": training_result["selection_metric"],
         "reconstruction_loss": best_history["reconstruction_loss"],
         "kl_loss": best_history["kl_loss"],
         "total_loss": best_history["total_loss"],
@@ -114,6 +119,17 @@ def run_vae(config: dict, config_path: Path, output_dir: str | Path) -> dict:
             "training": resolved_config["training"],
         },
     }
+    for key in (
+        "train_reconstruction_loss",
+        "train_kl_loss",
+        "train_total_loss",
+        "validation_reconstruction_loss",
+        "validation_kl_loss",
+        "validation_total_loss",
+    ):
+        if key in best_history:
+            metrics[key] = best_history[key]
+
     (output_path / "metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
     write_history_csv(training_result["history"], output_path / "training_history.csv")
     save_model_npz(model, output_path / "model.npz")

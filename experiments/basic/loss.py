@@ -15,7 +15,7 @@ EXPERIMENT = "loss"
 
 def main() -> None:
     args = parse_mode_args("Compare binary_cross_entropy vs mean_squared_error.")
-    base_config, base_config_path = load_base_config()
+    base_config, base_config_path = load_base_config(args.mode)
     variants = [
         ("bce", {"model": {"loss_function": "binary_cross_entropy"}}),
         ("mse", {"model": {"loss_function": "mean_squared_error"}}),

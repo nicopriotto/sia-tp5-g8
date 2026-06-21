@@ -15,7 +15,7 @@ EXPERIMENT = "architecture"
 
 def main() -> None:
     args = parse_mode_args("Compare architecture and activation variants ceteris paribus.")
-    base_config, base_config_path = load_base_config()
+    base_config, base_config_path = load_base_config(args.mode)
     variants = [
         (
             "enc_16",

@@ -7,12 +7,20 @@ from pathlib import Path
 
 from autoencoder_basic.main import load_config, run_basic_autoencoder
 
-from .reporting import aggregate_variant_summary, plot_comparison, write_comparison_csv, write_summary_csv
+from .reporting import (
+    BASIC_METRIC_SPECS,
+    aggregate_variant_summary,
+    plot_comparison,
+    select_best_variant_summary,
+    write_comparison_csv,
+    write_summary_csv,
+)
 from .seeds import MASTER_SEED, get_mode_seeds
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BASE_CONFIG_PATH = REPO_ROOT / "autoencoder_basic" / "configs" / "base.json"
+QUICK_CONFIG_PATH = REPO_ROOT / "autoencoder_basic" / "configs" / "quick.json"
 EXPERIMENT_OUTPUT_ROOT = REPO_ROOT / "experiments" / "output" / "basic"
 
 
@@ -32,8 +40,9 @@ def deep_update(base: dict, override: dict) -> dict:
     return result
 
 
-def load_base_config() -> tuple[dict, Path]:
-    return load_config(BASE_CONFIG_PATH)
+def load_base_config(mode: str = "formal") -> tuple[dict, Path]:
+    config_path = BASE_CONFIG_PATH if mode == "formal" else QUICK_CONFIG_PATH
+    return load_config(config_path)
 
 
 def prepare_variant_output(experiment: str, variant: str) -> Path:
@@ -82,7 +91,17 @@ def run_variant_multi_seed(
 def finalize_experiment(experiment: str, summary_rows: list[dict]) -> None:
     experiment_root = EXPERIMENT_OUTPUT_ROOT / experiment
     write_comparison_csv(experiment_root / "comparison.csv", summary_rows)
-    plot_comparison(experiment_root / "comparison.png", summary_rows, experiment=experiment)
+    plot_comparison(experiment_root / "comparison.png", summary_rows, experiment=experiment, metric_specs=BASIC_METRIC_SPECS)
+
+    best = select_best_variant_summary(summary_rows)
+    best_path = experiment_root / "best.json"
+    best_path.write_text(json.dumps(best, indent=2), encoding="utf-8")
+    print(
+        f"[{experiment}] ganador: {best['variant']}"
+        f"  full_success={best['full_success_rate_mean']:.3f}"
+        f"  max_err={best['max_pixel_error_mean']:.2f}"
+        f"  exact={best['exact_reconstruction_rate_mean']:.3f}"
+    )
 
 
 def dump_variant_overrides(output_path: str | Path, variants: list[tuple[str, dict]]) -> None:
