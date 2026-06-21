@@ -10,33 +10,16 @@ if str(REPO_ROOT) not in sys.path:
 from experiments.shared.experiment_utils import finalize_experiment, load_base_config, parse_mode_args, run_variant_multi_seed
 
 
-EXPERIMENT = "architecture"
+EXPERIMENT = "activation"
 
 
 def main() -> None:
-    args = parse_mode_args("Compare encoder/decoder topologies ceteris paribus.")
+    args = parse_mode_args("Compare hidden activation functions ceteris paribus.")
     base_config, base_config_path = load_base_config(args.mode)
     variants = [
-        (
-            "enc_16",
-            {"model": {"encoder_hidden_layers": [16], "decoder_hidden_layers": [16]}},
-        ),
-        (
-            "enc_32",
-            {"model": {"encoder_hidden_layers": [32], "decoder_hidden_layers": [32]}},
-        ),
-        (
-            "enc_24_8",
-            {"model": {"encoder_hidden_layers": [24, 8], "decoder_hidden_layers": [8, 24]}},
-        ),
-        (
-            "enc_32_16",
-            {"model": {"encoder_hidden_layers": [32, 16], "decoder_hidden_layers": [16, 32]}},
-        ),
-        (
-            "enc_32_16_8",
-            {"model": {"encoder_hidden_layers": [32, 16, 8], "decoder_hidden_layers": [8, 16, 32]}},
-        ),
+        ("tanh",       {"model": {"hidden_activation": "tanh",       "weight_init": "xavier_uniform"}}),
+        ("relu",       {"model": {"hidden_activation": "relu",       "weight_init": "he_uniform"}}),
+        ("leaky_relu", {"model": {"hidden_activation": "leaky_relu", "weight_init": "he_uniform"}}),
     ]
 
     summary_rows = []

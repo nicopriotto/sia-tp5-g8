@@ -34,6 +34,7 @@ log "Log file: ${LOG_FILE}"
 
 run_experiment "loss" "experiments/basic/loss.py"
 run_experiment "architecture" "experiments/basic/architecture.py"
+run_experiment "activation"   "experiments/basic/activation.py"
 run_experiment "optimizer_lr" "experiments/basic/optimizer_lr.py"
 run_experiment "regularization_threshold" "experiments/basic/regularization_threshold.py"
 
