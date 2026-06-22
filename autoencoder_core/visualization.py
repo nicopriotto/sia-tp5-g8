@@ -126,6 +126,22 @@ def plot_denoising_curve(
     plt.close(fig)
 
 
+def plot_binary_pattern(
+    pattern_binary: np.ndarray,
+    output_path: str | Path,
+    title: str,
+    subtitle: str | None = None,
+) -> None:
+    path = Path(output_path)
+    fig, ax = plt.subplots(figsize=(4, 5))
+    _draw_grid(ax, flat_to_grid(pattern_binary).astype(int), title)
+    if subtitle:
+        ax.set_xlabel(subtitle, fontsize=9)
+    fig.tight_layout()
+    fig.savefig(path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+
 def plot_generated_letter(
     latent_codes: np.ndarray,
     labels: list[str],
