@@ -28,7 +28,7 @@ from autoencoder_vae.model import VariationalAutoencoder
 
 def _show_row(axes, images: np.ndarray, ylabel: str | None = None) -> None:
     for col, ax in enumerate(axes):
-        ax.imshow(np.clip(images[col], 0.0, 1.0))
+        ax.imshow(np.clip(images[col], 0.0, 1.0), interpolation="nearest")
         ax.set_xticks([])
         ax.set_yticks([])
     if ylabel is not None:
@@ -60,7 +60,7 @@ def plot_generated_grid(images: np.ndarray, output_path: Path, cols: int = 8) ->
         ax.set_xticks([])
         ax.set_yticks([])
         if idx < n:
-            ax.imshow(np.clip(images[idx], 0.0, 1.0))
+            ax.imshow(np.clip(images[idx], 0.0, 1.0), interpolation="nearest")
         else:
             ax.axis("off")
     fig.suptitle("VAE — punks generados desde z ~ N(0, I)")

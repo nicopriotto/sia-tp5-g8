@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from autoencoder_vae.main import load_config, run_vae
+from autoencoder_vae.generation import load_vae_npz
 
 from .seeds import MASTER_SEED, get_mode_seeds
 
@@ -57,7 +58,23 @@ SUMMARY_FIELDS = [
 def parse_mode_args(description: str) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("--mode", choices=["formal", "quick"], default="formal")
+    parser.add_argument(
+        "--max-seeds",
+        type=int,
+        default=None,
+        help="Cap the number of seeds per variant (e.g. 3 for a fast sweep). Defaults to the full set for the mode.",
+    )
     return parser.parse_args()
+
+
+def resolve_seeds(mode: str, max_seeds: int | None = None) -> list[int]:
+    """Seeds for a mode, optionally capped to the first ``max_seeds`` of them."""
+    seeds = get_mode_seeds(mode)
+    if max_seeds is not None:
+        if max_seeds < 1:
+            raise ValueError("max_seeds must be >= 1")
+        seeds = seeds[:max_seeds]
+    return seeds
 
 
 def deep_update(base: dict, override: dict) -> dict:
@@ -166,8 +183,9 @@ def run_variant_multi_seed(
     base_config_path: Path,
     override: dict,
     mode: str,
+    max_seeds: int | None = None,
 ) -> tuple[dict, list[dict]]:
-    seeds = get_mode_seeds(mode)
+    seeds = resolve_seeds(mode, max_seeds)
     variant_output_dir = prepare_variant_output(experiment, variant)
     run_metrics: list[dict] = []
 
@@ -278,3 +296,114 @@ def finalize_experiment(experiment: str, summary_rows: list[dict]) -> None:
         f" val_total_std={best['validation_total_loss_std']:.2f}"
         f" val_recon={best['validation_reconstruction_loss_mean']:.2f}"
     )
+
+
+# --- VAE-specific reporting: loss curves vs. a swept value + generated-sample montages ---
+
+
+def variant_run_dir(experiment: str, variant: str, run_idx: int = 0) -> Path:
+    """Path of a single multi-seed run inside a variant (run_00 is the first seed)."""
+    return EXPERIMENT_OUTPUT_ROOT / experiment / variant / f"run_{run_idx:02d}"
+
+
+def plot_metric_curves(
+    output_path: str | Path,
+    x_values: list[float],
+    rows: list[dict],
+    x_label: str,
+    title: str,
+    logx: bool = False,
+) -> None:
+    """Three side-by-side curves (val reconstruction / KL / total) vs. the swept value.
+
+    Replaces the bar chart for ordered numeric sweeps: it shows the trade-off as a
+    trend instead of disconnected bars, and keeps each metric on its own axis so a
+    large KL (e.g. at beta=0) does not crush the reconstruction scale.
+    """
+    x = np.asarray(x_values, dtype=float)
+    metric_specs = [
+        ("validation_reconstruction_loss_mean", "validation_reconstruction_loss_std", "Reconstrucción (val)", "tab:blue"),
+        ("validation_kl_loss_mean", "validation_kl_loss_std", "Divergencia KL (val)", "tab:orange"),
+        ("validation_total_loss_mean", "validation_total_loss_std", "Loss total (val)", "tab:green"),
+    ]
+    fig, axes = plt.subplots(1, 3, figsize=(13, 4))
+    for ax, (mean_key, std_key, ax_title, color) in zip(axes, metric_specs):
+        means = np.array([row[mean_key] for row in rows], dtype=float)
+        stds = np.array([row[std_key] for row in rows], dtype=float)
+        ax.errorbar(x, means, yerr=stds, color=color, marker="o", capsize=4, linewidth=1.8)
+        ax.set_title(ax_title)
+        ax.set_xlabel(x_label)
+        if logx:
+            ax.set_xscale("symlog")
+        ax.set_xticks(x)
+        ax.set_xticklabels([f"{value:g}" for value in x])
+        ax.grid(alpha=0.25)
+    fig.suptitle(title)
+    fig.tight_layout()
+    fig.savefig(Path(output_path), dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+
+def _reshape_samples(flat: np.ndarray, channels: int) -> np.ndarray:
+    n = flat.shape[0]
+    side = int(round((flat.shape[1] // channels) ** 0.5))
+    if channels == 1:
+        return flat.reshape(n, side, side)
+    return flat.reshape(n, side, side, channels)
+
+
+def plot_sample_montage(
+    output_path: str | Path,
+    entries: list[tuple[str, Path, int]],
+    title: str,
+    n_per_row: int = 8,
+    seed: int = 2024,
+    share_z: bool = False,
+) -> None:
+    """One row of prior samples (z ~ N(0, I) -> decode) per variant.
+
+    ``entries`` is a list of (row_label, run_dir, channels). ``share_z=True`` reuses
+    the same eps across rows (only valid when every variant has the same latent_dim,
+    e.g. the beta sweep) so differences come purely from the trained decoder.
+    """
+    nrows = len(entries)
+    fig, axes = plt.subplots(nrows, n_per_row, figsize=(n_per_row * 1.15, nrows * 1.25))
+    axes = np.atleast_2d(axes)
+    for r, (label, run_dir, channels) in enumerate(entries):
+        model = load_vae_npz(Path(run_dir) / "model.npz")
+        row_rng = np.random.default_rng(seed if share_z else seed + r)
+        z = row_rng.standard_normal((n_per_row, model.latent_dim))
+        images = _reshape_samples(np.clip(model.decode(z), 0.0, 1.0), channels)
+        for col in range(n_per_row):
+            ax = axes[r, col]
+            if channels == 1:
+                ax.imshow(images[col], cmap="gray", vmin=0.0, vmax=1.0)
+            else:
+                ax.imshow(images[col])
+            ax.set_xticks([])
+            ax.set_yticks([])
+            if col == 0:
+                ax.set_ylabel(label, fontsize=10, rotation=0, ha="right", va="center", labelpad=18)
+    fig.suptitle(title)
+    fig.tight_layout()
+    fig.savefig(Path(output_path), dpi=130, bbox_inches="tight")
+    plt.close(fig)
+
+
+def select_knee_variant(summary_rows: list[dict], x_values: list[float], tol: float = 0.05) -> dict:
+    """Smallest swept value whose val reconstruction is within ``tol`` of the best.
+
+    For capacity sweeps (latent_dim) the goal is the *minimum sufficient* value, not
+    the absolute lowest loss (which always favours the largest capacity). We take the
+    best reconstruction and return the cheapest variant within ``tol`` relative of it.
+    """
+    if not summary_rows:
+        raise ValueError("summary_rows cannot be empty")
+    recon = np.array([row["validation_reconstruction_loss_mean"] for row in summary_rows], dtype=float)
+    best = float(recon.min())
+    threshold = best * (1.0 + tol)
+    order = np.argsort(np.asarray(x_values, dtype=float))
+    for idx in order:
+        if recon[idx] <= threshold:
+            return summary_rows[idx]
+    return summary_rows[int(recon.argmin())]

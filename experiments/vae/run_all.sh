@@ -32,6 +32,7 @@ run_experiment() {
 log "Run completo iniciado mode=${MODE}"
 log "Log file: ${LOG_FILE}"
 
+run_experiment "channels" "experiments/vae/channels.py"
 run_experiment "beta" "experiments/vae/beta.py"
 run_experiment "latent_dim" "experiments/vae/latent_dim.py"
 
