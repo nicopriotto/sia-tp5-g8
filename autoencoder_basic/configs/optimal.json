@@ -15,7 +15,7 @@
     "decoder_hidden_layers": [32],
     "hidden_activation": "leaky_relu",
     "output_activation": "sigmoid",
-    "weight_init": "xavier_uniform",
+    "weight_init": "he_uniform",
     "dropout": 0.0,
     "loss_function": "binary_cross_entropy",
     "optimizer": "adam"
@@ -23,7 +23,7 @@
   "training": {
     "learning_rate": 0.003,
     "batch_size": 8,
-    "epochs_max": 4000,
+    "epochs_max": 2000,
     "early_stopping_patience": 400,
     "l2_weight_decay": 1e-05,
     "gradient_clip_norm": 5
