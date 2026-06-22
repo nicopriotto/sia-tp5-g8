@@ -18,23 +18,23 @@ def main() -> None:
     base_config, base_config_path = load_base_config(args.mode)
     variants = [
         (
-            "enc_16",
+            "hidden_16",
             {"model": {"encoder_hidden_layers": [16], "decoder_hidden_layers": [16]}},
         ),
         (
-            "enc_32",
+            "hidden_32",
             {"model": {"encoder_hidden_layers": [32], "decoder_hidden_layers": [32]}},
         ),
         (
-            "enc_24_8",
+            "hidden_24_8",
             {"model": {"encoder_hidden_layers": [24, 8], "decoder_hidden_layers": [8, 24]}},
         ),
         (
-            "enc_32_16",
+            "hidden_32_16",
             {"model": {"encoder_hidden_layers": [32, 16], "decoder_hidden_layers": [16, 32]}},
         ),
         (
-            "enc_32_16_8",
+            "hidden_32_16_8",
             {"model": {"encoder_hidden_layers": [32, 16, 8], "decoder_hidden_layers": [8, 16, 32]}},
         ),
     ]
