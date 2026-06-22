@@ -142,12 +142,13 @@ def plot_comparison(
     axes = np.array(axes).ravel()
 
     for ax, (mean_key, std_key, title, color) in zip(axes, metric_specs):
-        means = [row[mean_key] for row in rows]
-        stds = [row[std_key] for row in rows]
+        means = [float(row[mean_key]) for row in rows]
+        stds = [float(row[std_key]) for row in rows]
         ax.bar(x, means, yerr=stds, color=color, capsize=5, error_kw={"linewidth": 1.2})
         ax.set_title(title)
         ax.set_xticks(x)
         ax.set_xticklabels(names, rotation=30, ha="right")
+        ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda v, _: f"{v:.2f}" if v % 1 else f"{v:.0f}"))
 
     for ax in axes[n:]:
         ax.set_visible(False)
