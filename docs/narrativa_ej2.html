@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Narrativa oral — Ejercicio 2 (VAE) · TP5 SIA</title>
+<style>
+  :root{
+    --bg:#0f1b2d; --card:#ffffff; --ink:#1b2430; --muted:#5b6b7b;
+    --teal:#16a085; --blue:#2980d6; --purple:#7b54c4; --green:#1f9d57; --amber:#d98b1f;
+    --line:#e3e8ee;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:16px/1.55 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+       color:var(--ink);background:#eef1f5;padding:0 0 80px}
+  header{background:linear-gradient(135deg,#0f1b2d,#15324a);color:#fff;padding:34px 28px 30px}
+  header h1{margin:0 0 6px;font-size:26px}
+  header p{margin:4px 0;color:#b9c7d6;font-size:14px}
+  .wrap{max-width:980px;margin:0 auto;padding:0 20px}
+  .legend{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+  .chip{display:inline-block;padding:2px 10px;border-radius:20px;font-size:12px;font-weight:600;color:#fff}
+  .c-enun{background:var(--blue)} .c-teo{background:var(--purple)} .c-ap{background:var(--green)}
+  .map{background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px 22px;margin:26px 0}
+  .map h2{margin:0 0 10px;font-size:18px;color:var(--teal)}
+  .map li{margin:4px 0}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+        margin:22px 0;overflow:hidden;box-shadow:0 1px 3px rgba(20,40,60,.06)}
+  .card>.head{padding:14px 22px;background:#f6f8fb;border-bottom:1px solid var(--line);
+       display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .num{background:var(--teal);color:#fff;font-weight:700;border-radius:8px;
+       min-width:38px;height:38px;display:grid;place-items:center;font-size:15px}
+  .head h3{margin:0;font-size:18px;flex:1 1 260px}
+  .body{padding:6px 22px 20px}
+  .body h4{margin:16px 0 6px;font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+  .say{background:#f3f9f7;border-left:4px solid var(--teal);padding:12px 16px;border-radius:0 8px 8px 0;margin:6px 0}
+  .say p{margin:8px 0}
+  ul.k{margin:6px 0;padding-left:20px} ul.k li{margin:4px 0}
+  table{border-collapse:collapse;margin:8px 0;font-size:14px}
+  th,td{border:1px solid var(--line);padding:5px 10px;text-align:center}
+  th{background:#f6f8fb}
+  code{background:#eef1f5;padding:1px 6px;border-radius:5px;font-size:13px}
+  .tag{font-size:11px;color:var(--muted)}
+  .pill{font-size:11px;padding:2px 8px;border-radius:6px;border:1px solid var(--line);color:var(--muted)}
+  .faq{background:#fff;border:1px solid var(--line);border-radius:14px;padding:6px 22px 18px;margin:26px 0}
+  .faq h2{color:var(--amber);font-size:18px}
+  .faq details{border-bottom:1px solid var(--line);padding:10px 0}
+  .faq summary{cursor:pointer;font-weight:600}
+  .faq details p{margin:8px 0 0;color:#33414f}
+  .note{font-size:13px;color:var(--muted);margin-top:6px}
+  .eq{font-family:ui-monospace,Menlo,Consolas,monospace;background:#10233a;color:#cfe6ff;
+      padding:8px 12px;border-radius:8px;display:inline-block;margin:4px 0;font-size:13px}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>Narrativa oral — Ejercicio 2: Autoencoder Variacional (VAE)</h1>
+    <p>TP5 · Sistemas de Inteligencia Artificial · ITBA · Priotto · Lategana · Ahumada · Bassi</p>
+    <p>Guion de referencia por diapositiva (deck de 54 slides; el ejercicio 2 son las slides 40–53). Anclado en el enunciado, la teoría de la materia (cap. 18) y nuestro aporte experimental.</p>
+    <div class="legend">
+      <span class="chip c-enun">enunciado</span>
+      <span class="chip c-teo">teoría</span>
+      <span class="chip c-ap">nuestro aporte</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="map">
+    <h2>Hilo conductor (mencionalo al arrancar y al cerrar)</h2>
+    <p>El enunciado del punto 2 pide tres cosas. Toda la sección responde a esto:</p>
+    <ul class="k">
+      <li><b>2a · dataset nuevo</b> → CryptoPunks (slide 41) + elección de representación RGB (slide 48).</li>
+      <li><b>2b · esquema variacional que arregle la representación latente</b> → teoría del VAE (slide 42) + estudio de β, latente y canales (44–48) + <b>búsqueda conjunta β×latente</b> (49–50).</li>
+      <li><b>2c · generar una muestra nueva válida</b> → generación desde el prior (slide 51) + prueba de originalidad (slide 52).</li>
+    </ul>
+    <p class="note">Metodología: <b>ceteris paribus</b> (fijamos una config base y barremos un eje por vez), <b>multi-seed</b> en los barridos formales (10 seeds → barras de error), <b>coarse-to-fine</b> en β, y para cerrar el círculo una <b>búsqueda conjunta β×latente</b> (grid 2D) que demuestra que la combinación elegida es óptima y no dos decisiones sueltas. Todo implementado <b>a mano en numpy</b>, sin frameworks: red, backprop, optimizador, el <i>reparametrization trick</i> y la KL.</p>
+  </div>
+
+  <!-- 40 -->
+  <div class="card">
+    <div class="head"><span class="num">40</span><h3>EJERCICIO 2 — Autoencoder Variacional (VAE)</h3>
+      <span class="chip c-enun">enunciado</span></div>
+    <div class="body">
+      <h4>En pantalla</h4>
+      <p>Portada de sección.</p>
+      <h4>Qué decir</h4>
+      <div class="say">
+        <p>“Pasamos al ejercicio 2: extender el autoencoder del punto 1 para que opere como un <b>VAE</b>, un autoencoder <b>variacional</b>. El enunciado nos pide tres cosas: elegir un <b>dataset nuevo</b>, modificar el autoencoder con un <b>esquema variacional</b> que resuelva el problema de la representación en el espacio latente, y usarlo para <b>generar una muestra nueva</b> que podamos juzgar como parte del conjunto. Lo vamos a recorrer en ese orden.”</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 41 -->
+  <div class="card">
+    <div class="head"><span class="num">41</span><h3>CryptoPunks — el dataset</h3>
+      <span class="chip c-enun">2a</span></div>
+    <div class="body">
+      <h4>En pantalla</h4>
+      <p>Muestras de punks · 10.000 avatares · 24×24 · únicos.</p>
+      <h4>Qué decir</h4>
+      <div class="say">
+        <p>“Como dataset nuevo elegimos los <b>CryptoPunks</b>: 10.000 avatares de pixel-art de 24×24 píxeles en RGB, todos únicos. Los elegimos por tres razones concretas:</p>
+        <p>— <b>Tamaño manejable</b>: 24×24 son 1728 valores, entrenable a mano en numpy sin GPU.<br>
+        — <b>Evaluable visualmente</b>: a diferencia de un vector abstracto, un punk generado se juzga a ojo — sabés si es creíble o no.<br>
+        — <b>Estructura combinable</b>: los rasgos (pelo, piel, gorras, lentes, cigarrillo) se combinan, justo lo que un modelo generativo tiene que aprender a recombinar.</p>
+        <p>El objetivo, que es el del enunciado, es que el VAE <b>genere punks nuevos y creíbles que no existen en la colección</b>.”</p>
+      </div>
+      <p class="note">Si preguntan por preprocesamiento: las imágenes se normalizan a [0,1] y se aplanan a vectores de 1728; el script está en <code>data/data_punks_bundle/preprocess.py</code>.</p>
+    </div>
+  </div>
+
+  <!-- 42 -->
+  <div class="card">
+    <div class="head"><span class="num">42</span><h3>Esquema variacional (teoría)</h3>
+      <span class="chip c-teo">teoría</span><span class="chip c-enun">2b</span></div>
+    <div class="body">
+      <h4>En pantalla</h4>
+      <p>Diagrama Encoder → (μ, log σ²) → <code>z = μ + σ·ε</code> → Decoder · <code>Loss = Reconstrucción + β·KL</code>.</p>
+      <h4>Qué decir (esta es la slide teórica clave)</h4>
+      <div class="say">
+        <p><b>1) El problema.</b> “Un autoencoder común es <b>determinístico</b>: mapea cada imagen a un único punto del espacio latente. El problema es que ese espacio queda <b>disperso, con huecos</b> — si elijo un punto al azar, el decoder no produce nada válido. Sirve para comprimir, no para generar.”</p>
+        <p><b>2) La idea del VAE.</b> “En vez de mapear cada x a un punto, lo mapeamos a una <b>distribución</b> <code>N(μ, σ²)</code>. Es una <b>red neuronal estocástica</b>: para un mismo x, samplea z distintos a su alrededor. Así obligamos al decoder a que <b>todo el entorno</b> de cada código decodifique en algo parecido → el latente se vuelve <b>continuo y denso</b>, sin huecos.”</p>
+        <p><b>3) El reparametrization trick.</b> “Para poder muestrear y aún así retropropagar el error, no sampleamos z directo: lo escribimos como <span class="eq">z = μ + σ · ε,&nbsp; ε ~ N(0, I)</span> El ruido queda afuera (ε), y μ y σ son determinísticos y derivables. Eso permite entrenar la red con backprop normal.”</p>
+        <p><b>4) La función de costo (inferencia variacional).</b> “La p.d.f. real del latente no la conocemos, así que la <b>aproximamos</b> con una normal y optimizamos sus parámetros — eso es inferencia variacional. Maximizar la verosimilitud lleva al <b>ELBO</b>, que se parte justo en dos términos:”</p>
+        <p style="text-align:center"><span class="eq">L = E[log p(x|z)]  −  KL( q(z|x) ‖ p(z) )&nbsp;&nbsp;⟹&nbsp;&nbsp;min: Reconstrucción + KL</span></p>
+        <p>“El primer término es el <b>error de reconstrucción</b>; el segundo, la <b>divergencia KL</b>, que mide cuánto se aleja la distribución del encoder del <b>prior</b> <code>N(0, I)</code>. Esa KL es la que <b>ordena el latente</b>: lo empuja a parecerse a una normal estándar, de modo que samplear <code>z ~ N(0, I)</code> y decodificar produzca punks válidos.”</p>
+        <p><b>5) El β.</b> “En el libro la función queda como <code>J = L + λ·R</code>: base más regularizador. Ese λ es <b>nuestro β</b>, el peso de la KL. β chico → prioriza copiar fiel pero desordena el latente; β grande → ordena el latente a costa de nitidez y diversidad. Calibrar ese β, junto con la capacidad latente, es buena parte de nuestro estudio.”</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 43 -->
+  <div class="card">
+    <div class="head"><span class="num">43</span><h3>Configuración base — Ej 2</h3>
+      <span class="chip c-ap">aporte</span></div>
+    <div class="body">
+      <h4>En pantalla</h4>
+      <p>Arquitectura <code>[1728, 512, 128, latente]</code>, ReLU + sigmoid, He-uniform · BCE + β·KL (β=1.0) · Adam, lr 1e-3 · batch 128 · punks_rgb (10.000).</p>
+      <h4>Qué decir</h4>
+      <div class="say">
+        <p>“Esta es la <b>configuración de partida</b> del estudio. La red es un MLP simétrico: el encoder comprime 1728 → 512 → 128 y de ahí saca <b>dos cabezales</b>, μ y log σ², de dimensión latente; el decoder reconstruye en espejo. Activación ReLU en las capas ocultas y sigmoid a la salida (probabilidad por píxel). Pérdida = binary cross-entropy + β·KL, optimizador Adam.”</p>
+        <p>“Dos aclaraciones importantes: <b>todo está hecho a mano en numpy</b> — el backprop, el reparametrization trick y la KL los derivamos e implementamos nosotros, sin frameworks. Y la <b>selección del modelo es por loss</b>, no por error de píxel exacto, porque con imágenes a color continuas ese criterio no aplica.”</p>
+        <p>“A partir de acá aplicamos <b>ceteris paribus</b>: fijamos todo esto y barremos <b>un hiperparámetro por vez</b> — primero β, después capacidad latente, después la representación de color — y al final los cruzamos en una <b>búsqueda conjunta</b>.”</p>
+      </div>
+      <p class="note">β=1.0 acá es el <b>ancla</b> del barrido (el VAE canónico). El estudio termina eligiendo <b>β=2 y latente=8</b> — la conclusión y la búsqueda conjunta lo reflejan.</p>
+    </div>
+  </div>
+
+  <!-- 44 -->
+  <div class="card">
+    <div class="head"><span class="num">44</span><h3>Eje β — Barrido: reconstrucción vs KL</h3>
+      <span class="chip c-ap">aporte</span><span class="chip c-teo">teoría</span></div>
+    <div class="body">
+      <h4>En pantalla</h4>
+      <p>Curvas recon / KL vs β (barrido grueso <code>{0, 1, 2, 4, 8}</code>, 10 seeds).</p>
+      <h4>Qué decir</h4>
+      <div class="say">
+        <p>“Primer eje: <b>β</b>, el peso de la KL. Barrido grueso, cada valor con <b>10 seeds</b> para tener barras de error.”</p>
+        <p>“Lo que se ve: la <b>reconstrucción casi no cambia</b>, pero la <b>KL cae fuerte</b> al subir β — ordenamos el latente pagando muy poco en fidelidad.”</p>
+        <p><b>El punto metodológico clave:</b> “Ojo — <b>no se puede elegir β por la loss total</b>. Como total = recon + β·KL, el β=0 siempre tiene la loss total más baja (no paga KL)… y es justo el peor para generar. La reconstrucción sola tampoco sirve: es monótona en β. Hace falta mirar la <b>generación</b> — lo hacemos en las próximas slides.”</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 45 -->
+  <div class="card">
+    <div class="head"><span class="num">45</span><h3>Eje β — Refinamiento (coarse-to-fine)</h3>
+      <span class="chip c-ap">aporte (fuerte)</span></div>
+    <div class="body">
+      <h4>En pantalla</h4>
+      <p>GIF animado con 3 paneles — <b>β = 0 (fantasmas) → 2 (óptimo) → 8 (colapso)</b> — ciclando punks generados (mismo régimen, latente fijo).</p>
+      <h4>Qué decir</h4>
+      <div class="say">
+        <p>“Para <i>ver</i> qué hace β en la generación, animamos los dos extremos y el medio. Miren el GIF.”</p>
+        <p>“<b>β=0</b>: tiene buena reconstrucción, pero la KL es enorme — el latente no se ordena y al samplear el prior salen <b>fantasmas y ruido</b> (estática de color). <b>β=8</b>: el latente queda apretadísimo pero <b>colapsa</b> — los punks se vuelven borrosos y todos parecidos, sin diversidad. <b>β=2</b>: limpio y variado a la vez.”</p>
+        <p><b>El insight:</b> “La reconstrucción es <b>monótona</b> (dice ‘menos β’) y la KL es <b>monótona</b> (dice ‘más β’) — se contradicen. Pero la <b>calidad de generación es en U</b>: mala-buena-mala. Por eso <b>ninguna métrica sola sirve</b>: hay que mirar el trade-off y las imágenes.”</p>
+        <p><b>Cómo elegimos:</b> “Descartamos los dos modos de falla y nos quedamos con la <b>meseta sana</b> alrededor de β=2 — el codo del trade-off.”</p>
+      </div>
+      <table>
+        <tr><th>β</th><th>recon</th><th>KL</th><th></th></tr>
+        <tr><td>0</td><td>967</td><td>~60</td><td>fantasmas</td></tr>
+        <tr><td>2</td><td>974</td><td>8.7</td><td><b>óptimo</b></td></tr>
+        <tr><td>8</td><td>990</td><td>4.8</td><td>colapso</td></tr>
+      </table>
+      <p class="note">(Refinamiento ceteris paribus, latente fijo; mismo z por panel → diferencias puras de β.)</p>
+    </div>
+  </div>
+
+  <!-- 46 -->
+  <div class="card">
+    <div class="head"><span class="num">46</span><h3>Eje latente — ¿Cuánta capacidad?</h3>
+      <span class="chip c-ap">aporte</span></div>
+    <div class="body">
+      <h4>En pantalla</h4>
+      <p>Curva reconstrucción vs dimensión latente {2, 4, 8, 16, 32} + montaje por dimensión.</p>
+      <h4>Qué decir</h4>
+      <div class="say">
+        <p>“Segundo eje: <b>cuántas dimensiones</b> necesita el latente. La reconstrucción mejora con la capacidad pero <b>satura</b>: gana mucho de 2 a 8, y de 8 en adelante casi no se mueve.”</p>
+        <p><b>Criterio:</b> “Acá <b>no</b> elegimos el de menor loss, porque eso siempre premia la dimensión más grande. Buscamos el <b>codo</b> — la <b>capacidad mínima suficiente</b>. Esa lectura la afinamos en la slide siguiente con las imágenes.”</p>
+        <p>“Conecta con el punto 1: allá un latente de 2 alcanzaba para 32 letras binarias; acá, con imágenes a color más complejas, hace falta más.”</p>
+      </div>
+      <p class="note">recon: latente 2 → 1030 · 4 → 996 · 8 → 978 · 16 → 975 (casi igual a 8) · 32 ≈ igual. El salto grande es 2→8; de 8 a 16 ya no compensa.</p>
+    </div>
+  </div>
+
+  <!-- 47 -->
+  <div class="card">
+    <div class="head"><span class="num">47</span><h3>Eje latente — Refinamiento: capacidad vs nitidez (4 → 8 → 16)</h3>
+      <span class="chip c-ap">aporte</span></div>
+    <div class="body">
+      <h4>En pantalla</h4>
+      <p>GIF animado con 3 paneles — <b>latente 4 → 8 → 16</b> — ciclando punks generados (β=2 fijo).</p>
+      <h4>Qué decir</h4>
+      <div class="say">
+        <p>“Acercándonos al codo, comparamos 4, 8 y 16 con β fijo en 2. Miren el GIF: con <b>latente 4</b> los punks salen un poco blandos, con rasgos <b>fantasma</b>; con <b>latente 8</b> quedan <b>nítidos y definidos</b>; con <b>16</b> no se gana definición y empieza a aparecer ruido, además de perder algo de diversidad.”</p>
+        <p><b>Elección:</b> “<b>Latente 8</b> es el punto justo: reconstruye igual que 16 pero sin su ruido, y claramente mejor definido que 4. Es la <b>capacidad mínima suficiente</b>.”</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 48 -->
+  <div class="card">
+    <div class="head"><span class="num">48</span><h3>Eje canales — RGBA vs RGB vs gris</h3>
+      <span class="chip c-ap">aporte</span><span class="chip c-enun">2a</span></div>
+    <div class="body">
+      <h4>En pantalla</h4>
+      <p>Barras de reconstrucción por valor (BCE / input_dim) + montaje por representación.</p>
+      <h4>Qué decir</h4>
+      <div class="say">
+        <p>“Tercer eje: cómo <b>representar</b> la imagen — escala de grises, RGB o RGBA (con canal alpha). Como cada una tiene distinta cantidad de valores, no se puede comparar la BCE cruda; la <b>normalizamos por dimensión</b> (BCE por valor), que es lo justo.”</p>
+        <p>“RGB reconstruye <b>mejor por valor que gris</b> y, obvio, conserva el color. <b>RGBA parece ganar</b> pero es una <b>trampa</b>: el canal alpha de los punks es casi constante — están todos opacos — así que es trivial de predecir y <b>baja artificialmente</b> el promedio. No reconstruye mejor, tiene un canal regalado.”</p>
+        <p>“Por eso elegimos <b>RGB</b>. Es un buen ejemplo de por qué hay que mirar las métricas con cuidado — tema que retomamos en la búsqueda conjunta.”</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 49 -->
+  <div class="card">
+    <div class="head"><span class="num">49</span><h3>Búsqueda conjunta β × latente — elegir por propiedad</h3>
+      <span class="chip c-ap">aporte (fuerte)</span></div>
+    <div class="body">
+      <h4>En pantalla</h4>
+      <p>Heatmap 3 paneles (Reconstrucción · KL en log · Diversidad) sobre la grilla β∈{0,1,2,4,8} × latente∈{2,4,8,16}; celda <b>(β=2, latente=8)</b> recuadrada.</p>
+      <h4>Qué decir</h4>
+      <div class="say">
+        <p>“Hasta acá elegimos β y latente <b>por separado</b> — pero β lo habíamos calibrado con el latente viejo. Para cerrar el círculo entrenamos la <b>grilla completa</b>: 20 combinaciones de β y latente, todas en igualdad de condiciones, y las juzgamos por la <b>generación</b>.”</p>
+        <p><b>La clave es no usar un solo número.</b> “Usamos una métrica por decisión, cada una midiendo una propiedad <b>no confundible</b>:</p>
+        <ul class="k">
+          <li><b>Reconstrucción</b> → fija la <b>capacidad</b>: mejora de 2 a 8 y se aplana en 16 → <b>latente 8</b>.</li>
+          <li><b>KL</b> → cota <b>inferior</b> de β: con β=0/1 la KL se dispara (huecos en el prior = ruido), así que β ≥ 2.</li>
+          <li><b>Diversidad</b> → cota <b>superior</b> de β: con β=8 colapsa (punks al promedio), así que β ≤ 4.</li>
+        </ul>
+        <p>“La <b>única celda limpia en las tres</b> es <b>β=2, latente=8</b> — la recuadrada. Y lo confirmamos a ojo. La elección ya no es ‘dos decisiones sueltas’: es un <b>óptimo conjunto</b>.”</p>
+      </div>
+      <table>
+        <tr><th>latente (β=2)</th><th>recon</th></tr>
+        <tr><td>2</td><td>1030</td></tr>
+        <tr><td>4</td><td>996</td></tr>
+        <tr><td><b>8</b></td><td><b>978</b></td></tr>
+        <tr><td>16</td><td>981</td></tr>
+      </table>
+      <p class="note">(Grid de 20 celdas, 2000 punks, 60 épocas, misma semilla — el VAE sobre imágenes continuas es estable entre seeds, así que un scan single-seed alcanza para el paisaje.)</p>
+    </div>
+  </div>
+
+  <!-- 50 -->
+  <div class="card">
+    <div class="head"><span class="num">50</span><h3>Búsqueda conjunta — el trade-off (por qué la métrica ingenua engaña)</h3>
+      <span class="chip c-ap">aporte (fuerte)</span></div>
+    <div class="body">
+      <h4>En pantalla</h4>
+      <p>Scatter diversidad ↔ realismo de las 20 celdas + frontera de Pareto; <b>β8·l4 marcado en rojo</b> (engañoso), <b>β2·l8 en verde</b> (elegido).</p>
+      <h4>Qué decir</h4>
+      <div class="say">
+        <p>“Esta slide es el ‘por qué’ de la anterior, y es un punto fino. Si hubiéramos elegido por un <b>puntaje combinado ingenuo</b> — sumar realismo y diversidad — el ‘ganador’ habría sido <b>β=8, latente=4</b> (el punto rojo). Pero al mirarlo, son punks <b>promediados, seguros, poco creativos</b>.”</p>
+        <p><b>Por qué engaña:</b> “La métrica de ‘realismo’ es la distancia al punk real más cercano. <b>Premia lo borroso</b>: un punk promediado cae cerca de la media del dataset y puntúa ‘muy realista’, aunque sea aburrido. Y la ‘diversidad’ se <b>infla con ruido</b> (β=0 tiene diversidad máxima… porque es estática). Ninguna métrica pixel-a-pixel sola, ni su suma, es un puntaje de calidad fiel — es el <b>mismo motivo</b> por el que la loss total no sirve para β.”</p>
+        <p><b>Conclusión:</b> “Por eso elegimos por <b>propiedades separadas</b> (slide anterior) y validamos con las imágenes. β2·l8 — el verde — está en la zona buena de la frontera: <b>diverso y nítido a la vez</b>.”</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 51 -->
+  <div class="card">
+    <div class="head"><span class="num">51</span><h3>Generación — Punks nuevos desde z ~ N(0, I)</h3>
+      <span class="chip c-enun">2c</span><span class="chip c-teo">teoría</span></div>
+    <div class="body">
+      <h4>En pantalla</h4>
+      <p>GIF de punks generados (z ~ N(0, I), τ=1) + proyección PCA del latente + tira de interpolación latente. (Modelo final: RGB · β=2 · latente 8 · 10.000 punks.)</p>
+      <h4>Qué decir</h4>
+      <div class="say">
+        <p>“Con la config elegida — <b>RGB, β=2, latente 8</b> — entrenamos el <b>modelo final</b> sobre los 10.000 punks. Y acá cumplimos el <b>2c</b>: <b>sampleamos z ~ N(0, I)</b>, lo pasamos por el decoder, y salen <b>punks nuevos</b> — pelos de colores, gorras, lentes, distintas pieles. No estaban en el dataset; los generó el modelo.”</p>
+        <p>“La <b>interpolación</b> es la prueba de que el <b>2b funcionó</b>: tomamos dos punks, los codificamos y caminamos en línea recta entre sus códigos. La transición es <b>suave</b> y todos los pasos intermedios son punks válidos → el latente quedó <b>continuo</b>, sin huecos. Eso es exactamente lo que la KL nos dio.”</p>
+        <p>“El scatter PCA muestra la nube de códigos: compacta y centrada en el origen, como manda el prior N(0,I).”</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 52 -->
+  <div class="card">
+    <div class="head"><span class="num">52</span><h3>Conclusión — Genera punks nuevos, no copia</h3>
+      <span class="chip c-enun">2c</span><span class="chip c-ap">aporte</span></div>
+    <div class="body">
+      <h4>En pantalla</h4>
+      <p>VAE · RGB · latente 8 · β=2.0 · 82% originales · 0 copias exactas de 200 · combina rasgos · latente continuo.</p>
+      <h4>Qué decir</h4>
+      <div class="say">
+        <p>“Para cerrar, ¿y si el modelo simplemente <b>memoriza y copia</b>? Lo medimos. Para cada punk generado buscamos su <b>vecino más cercano</b> entre los reales, en <b>dos espacios distintos</b>: el latente del propio VAE y un PCA sobre los píxeles — usamos dos para no juzgar al VAE solo con su propia regla (evitar circularidad).”</p>
+        <p>“Resultados: <b>0 copias exactas</b> sobre 200 muestras, y <b>82% son genuinamente nuevos en ambos espacios</b> (más lejos de cualquier original que lo que los originales están entre sí). Combina rasgos que en el dataset venían separados, y el latente quedó continuo. Conclusión: el VAE <b>genera, no copia</b> — cumplimos 2a, 2b y 2c.”</p>
+      </div>
+      <p class="note">Config final: <code>autoencoder_vae/configs/final.json</code> (β=2, latente 8). Recordá: β=1 / latente en la slide 43 es el ancla del barrido; el final es β=2 con latente 8.</p>
+    </div>
+  </div>
+
+  <!-- 53 -->
+  <div class="card">
+    <div class="head"><span class="num">53</span><h3>Cierre — Gracias / ¿Preguntas?</h3></div>
+    <div class="body">
+      <h4>Qué decir</h4>
+      <div class="say"><p>“En resumen: elegimos un dataset, lo representamos en RGB, ordenamos el latente con el esquema variacional, y con una <b>búsqueda conjunta</b> calibramos <b>β=2 y una capacidad de 8 dimensiones</b>. Con eso generamos punks nuevos y originales. Gracias — quedamos para preguntas.”</p></div>
+    </div>
+  </div>
+
+  <!-- FAQ -->
+  <div class="faq">
+    <h2>Preguntas probables del jurado (y respuesta corta)</h2>
+    <details><summary>¿Por qué β=2 y no β=1 (el VAE canónico)?</summary>
+      <p>β=1 es el ELBO puro y un default razonable, pero nuestro objetivo es <b>generar</b>. El refinamiento y la búsqueda conjunta muestran que β=2 ordena más el latente (menos KL = menos huecos en el prior) con un costo de reconstrucción despreciable y muestras visiblemente más nítidas, sin caer en el colapso de β alto. Es elección por <b>evidencia</b> (trade-off + imágenes), no por convención.</p></details>
+    <details><summary>¿Por qué no usar la loss total (ni una métrica única) para elegir?</summary>
+      <p>Porque <code>total = recon + β·KL</code> cambia con β: β=0 no paga KL y siempre tiene la loss más baja, siendo el peor para generar. Y las métricas pixel-a-pixel de generación están confundidas: la “distancia a un punk real” premia lo borroso (cerca de la media) y la “diversidad” se infla con ruido. Por eso elegimos por <b>propiedades separadas</b> (recon → capacidad; KL → cota inferior de β; diversidad → cota superior) y validamos a ojo.</p></details>
+    <details><summary>¿Para qué la búsqueda conjunta si ya barrieron cada eje?</summary>
+      <p>Barrer cada eje por separado es <i>coordinate descent</i>: tiene una circularidad (calibramos β con el latente viejo). El grid 2D entrena las 20 combinaciones y demuestra que <b>(β=2, latente=8) es un óptimo conjunto</b>, no dos decisiones sueltas encadenadas.</p></details>
+    <details><summary>¿Qué es el reparametrization trick y por qué hace falta?</summary>
+      <p>Samplear z es una operación aleatoria, no derivable → no se podría retropropagar. Lo reescribimos como <code>z = μ + σ·ε</code> con <code>ε~N(0,I)</code>: el azar queda en ε (afuera del grafo) y μ, σ son derivables. Así entrenamos con backprop normal.</p></details>
+    <details><summary>¿Por qué el prior es N(0, I) y qué hace la KL?</summary>
+      <p>Es una elección simple y estándar para q(z). La KL mide la distancia entre la distribución que produce el encoder y ese prior, y la penaliza: empuja los códigos a llenar una normal estándar, dejando el latente <b>continuo y muestreable</b>. Sin KL, el latente tiene huecos y el sampleo del prior falla (los “fantasmas” de β=0).</p></details>
+    <details><summary>¿Por qué latente 8 y no menos (o más)?</summary>
+      <p>La reconstrucción satura: gana mucho de 2 a 8 y casi nada de 8 a 16. Latente 4 deja punks blandos con rasgos fantasma; 16 no agrega definición y suma ruido y menos diversidad. Elegimos la <b>capacidad mínima suficiente</b> (codo), confirmado por el heatmap de reconstrucción y las imágenes.</p></details>
+    <details><summary>¿Cómo saben que genera y no copia?</summary>
+      <p>Vecino más cercano de cada generado contra los reales, en latente y en PCA de píxeles (dos espacios para evitar circularidad). 0 copias exactas de 200, 82% nuevos en ambos espacios.</p></details>
+    <details><summary>¿Por qué no un FID u otra métrica de calidad estándar?</summary>
+      <p>FID necesita una red preentrenada (Inception); todo el TP es numpy a mano. Usamos reconstrucción + KL + diversidad (propiedades separadas) e inspección visual, que para 24×24 alcanza para justificar la elección — y mostramos explícitamente por qué un puntaje único engaña.</p></details>
+  </div>
+
+  <p class="note" style="text-align:center;margin-top:30px">Figuras de respaldo: <code>experiments/output/vae/{beta,latent_dim,channels,grid}/</code> · <code>autoencoder_vae/output/{grid_heatmaps,grid_tradeoff}.png</code> · <code>autoencoder_vae/output/gifs/</code></p>
+
+</div>
+</body>
+</html>

@@ -223,6 +223,10 @@ autoencoder_denoising/output/
 autoencoder_vae/output/
 experiments/output/
 
+# Presentation deck + exports (se comparten aparte, no por git)
+docs/*.pptx
+docs/*.pdf
+
 # CryptoPunks dataset (se comparte por zip, no por git)
 data/raw/punks.png
 data/punks/
