@@ -1,21 +1,17 @@
 {
   "dataset": {
     "source_path": "../../data/raw/font.h",
-    "subset": {
-      "mode": "all_32",
-      "name": "all_32",
-      "indices": []
-    },
+    "subset": { "mode": "all_32", "name": "all_32", "indices": [] },
     "seed": 38200
   },
   "model": {
     "input_dim": 35,
-    "latent_dim": 16,
-    "encoder_hidden_layers": [32, 24],
-    "decoder_hidden_layers": [24, 32],
-    "hidden_activation": "tanh",
+    "latent_dim": 2,
+    "encoder_hidden_layers": [32, 16],
+    "decoder_hidden_layers": [16, 32],
+    "hidden_activation": "relu",
     "output_activation": "sigmoid",
-    "weight_init": "xavier_uniform",
+    "weight_init": "he_uniform",
     "dropout": 0.0,
     "loss_function": "binary_cross_entropy",
     "optimizer": "adam"
@@ -23,10 +19,10 @@
   "training": {
     "learning_rate": 0.003,
     "batch_size": 8,
-    "epochs_max": 2000,
-    "early_stopping_patience": 150,
+    "epochs_max": 4000,
+    "early_stopping_patience": 400,
     "l2_weight_decay": 1e-05,
-    "gradient_clip_norm": null
+    "gradient_clip_norm": 1.0
   },
   "evaluation": {
     "pixel_threshold": 0.5,
